@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Maze</title>
+	<script type="text/javascript">
+		//global variables.
+		var ctx;
+		var canvas;
+		var maze;
+		var mazeType = "kruskals";
+		
+		//objects
+		function Cell (xPos, yPos){
+			//properties
+			this.x = xPos;
+			this.y = yPos;
+			this.walls = {
+				right: true,
+				bottom: true
+			};
+			this.explored = false;
+			
+			//functions
+			this.getNeighbors = function (){
+				var neighbors = [];
+				
+				if (this.x - 1 >= 0){
+					neighbors.push(maze.cells[this.y][this.x - 1]);
+				}
+				if (this.x + 1 < maze.cells[0].length){
+					neighbors.push(maze.cells[this.y][this.x + 1]);
+				}
+				if (this.y - 1 >= 0){
+					neighbors.push(maze.cells[this.y - 1][this.x]);
+				}
+				if (this.y + 1 < maze.cells.length){
+					neighbors.push(maze.cells[this.y + 1][this.x]);
+				}
+				
+				return neighbors;
+			};
+			
+			this.getUnexploredNeighbors = function (){
+				var neighbors = [];
+				
+				if (this.x - 1 >= 0 && !maze.cells[this.y][this.x - 1].explored){
+					neighbors.push(maze.cells[this.y][this.x - 1]);
+				}
+				if (this.x + 1 < maze.cells[0].length && !maze.cells[this.y][this.x + 1].explored){
+					neighbors.push(maze.cells[this.y][this.x + 1]);
+				}
+				if (this.y - 1 >= 0 && !maze.cells[this.y - 1][this.x].explored){
+					neighbors.push(maze.cells[this.y - 1][this.x]);
+				}
+				if (this.y + 1 < maze.cells.length && !maze.cells[this.y + 1][this.x].explored){
+					neighbors.push(maze.cells[this.y + 1][this.x]);
+				}
+				
+				return neighbors;
+			};
+			
+			this.getOpenUnexploredNeighbors = function (traversedCells){
+				var neighbors = [];
+				
+				if (this.x - 1 >= 0 && !maze.cells[this.y][this.x - 1].walls["right"] && !maze.cells[this.y][this.x - 1].explored){
+					neighbors.push(maze.cells[this.y][this.x - 1]);
+				}
+				if (this.x + 1 < maze.cells[0].length && !maze.cells[this.y][this.x].walls["right"] && !maze.cells[this.y][this.x + 1].explored){
+					neighbors.push(maze.cells[this.y][this.x + 1]);
+				}
+				if (this.y - 1 >= 0 && !maze.cells[this.y - 1][this.x].walls["bottom"] && !maze.cells[this.y - 1][this.x].explored){
+					neighbors.push(maze.cells[this.y - 1][this.x]);
+				}
+				if (this.y + 1 < maze.cells.length && !maze.cells[this.y][this.x].walls["bottom"] && !maze.cells[this.y + 1][this.x].explored){
+					neighbors.push(maze.cells[this.y + 1][this.x]);
+				}
+				
+				for(var i = 0; i < traversedCells.length; i++){
+					for(var j = 0; j < neighbors.length; j++){
+						if(neighbors[j] === traversedCells[i]){
+							neighbors.splice(j, 1);
+						}
+					}
+				}
+				
+				return neighbors;
+			}
+			
+			this.draw = function(cellSize){
+				ctx.strokeStyle = "#000";
+				
+				if(this.walls.right){
+					ctx.beginPath();
+					ctx.moveTo(this.x * cellSize + cellSize + 1, this.y * cellSize);
+					ctx.lineTo(this.x * cellSize + cellSize + 1, this.y * cellSize + cellSize + 1);
+					ctx.stroke();
+				}
+				if(this.walls.bottom){
+					ctx.beginPath();
+					ctx.moveTo(this.x * cellSize, this.y * cellSize + cellSize + 1);
+					ctx.lineTo(this.x * cellSize + cellSize + 1, this.y * cellSize + cellSize + 1);
+					ctx.stroke();
+				}
+			};
+		}
+		
+		function Maze (sizeX, sizeY, startPos, endPos){
+			//properties
+			this.cells = [];
+			
+			//initialize cells
+			for(var y = 0; y < sizeY; y++){
+				this.cells.push([]);
+				for(var x = 0; x < sizeX; x++){
+					this.cells[y].push(new Cell(x, y));
+				}
+			}
+			
+			this.startPos = startPos || {x: 0, y: 0};
+			this.endPos = endPos || {x: this.cells[0].length - 1, y: this.cells.length - 1}
+			
+			//functions
+			this.createMaze = function (){
+				switch(mazeType){
+					case "backtrack":
+						var stack = [];
+						
+						this.cells[this.endPos.y][this.endPos.x].explored = true;
+						stack.push(this.cells[this.endPos.y][this.endPos.x]);
+						
+						while(!!stack.length){
+							var currentCell = stack[stack.length - 1];
+							var currentUnexploredNeighbors = currentCell.getUnexploredNeighbors();
+							
+							if(currentUnexploredNeighbors.length > 0){
+								var sortedNeighbors = shuffle(currentUnexploredNeighbors);
+								
+								var chosenNeighbor = sortedNeighbors[0];
+								chosenNeighbor.explored = true;
+								
+								this.removeWallBetweenCells(currentCell, chosenNeighbor);
+								
+								stack.push(chosenNeighbor);
+							}else{
+								stack.pop();
+							}
+						}
+					break;
+					case "kruskals":
+						var allCells = [];
+						var sets = [];
+						for(var y = 0; y < this.cells.length; y++){
+							for(var x = 0; x < this.cells[0].length; x++){
+								var setNumber = y * this.cells[0].length + x
+								allCells.push({cell: this.cells[y][x], setNumber: setNumber});
+								sets.push({number: setNumber, cells: [this.cells[y][x]]});
+							}
+						}
+						
+						shuffle(allCells);
+						
+						for(var c = 0; c < allCells.length; c++){
+							var neighbors = allCells[c].cell.getNeighbors();
+							var sortedNeighbors = shuffle(neighbors);
+							var chosenNeighbor = sortedNeighbors[0];
+							
+							//get this cell's set
+							var thisCellsSet;
+							for(s = 0; s < sets.length; s++){
+								if(sets[s].number === allCells[c].setNumber){
+									thisCellsSet = sets[s];
+								}
+							}
+							
+							//check if chosenNeighbor is in thisCellsSet
+							var sameSet = false;
+							for(t = 0; t < thisCellsSet.cells.length; t++){
+								if(thisCellsSet.cells[t] === chosenNeighbor){
+									sameSet = true;
+								}
+							}
+							
+							if(!sameSet){
+								//remove wall between cells
+								this.removeWallBetweenCells(allCells[c].cell, chosenNeighbor);
+								
+								//get chosenNeighbor cell's set
+								var chosenNeighborSet;
+								var chosenNeighborSetIndex;
+								for(s = 0; s < sets.length; s++){
+									if(sets[s].number !== thisCellsSet.number){
+										for(q = 0; q < sets[s].cells.length; q++){
+											if(sets[s].cells[q] === chosenNeighbor){
+												chosenNeighborSet = sets[s];
+												chosenNeighborSetIndex = s;
+											}
+										}
+									}
+								}
+								
+								//join both sets
+								for(n = 0; n < chosenNeighborSet.cells.length; n++){
+									chosenNeighborSet.cells[n].setNumber = thisCellsSet.number;
+									thisCellsSet.cells.push(chosenNeighborSet.cells[n]);
+								}
+								
+								//delete chosenNeighborSet
+								sets.splice(chosenNeighborSetIndex, 1);
+							}
+						}
+						
+						
+						break;
+				}
+			};
+			
+			this.removeWallBetweenCells = function (a, b){
+				// If a is to b's right, remove b's right wall
+				if (a.x > b.x){
+					b.walls['right'] = false;
+				}
+				// Do the opposite for the opposite case
+				else if (a.x < b.x){
+					a.walls['right'] = false;
+				}
+				// Same happens on the Y axis
+				if (a.y > b.y){
+					b.walls['bottom'] = false;
+				}
+				else if (a.y < b.y){
+					a.walls['bottom'] = false;
+				}
+			};
+			
+			this.solvedPath = function (){
+				for(var y = 0; y < this.cells.length; y++){
+					for(var x = 0; x < this.cells[y].length; x++){
+						this.cells[y][x].explored = false;
+					}
+				}
+				
+				var stack = [];
+				
+				this.cells[this.endPos.y][this.endPos.x].explored = true;
+				stack.push(this.cells[this.endPos.y][this.endPos.x]);
+				
+				while(!!stack.length && stack[stack.length - 1] !== this.cells[this.startPos.y][this.startPos.x]){
+					var currentCell = stack[stack.length - 1];
+					var currentOpenNeighbors = currentCell.getOpenUnexploredNeighbors(stack);
+					
+					if(currentOpenNeighbors.length > 0){
+						var chosenNeighbor = currentOpenNeighbors[0];
+						chosenNeighbor.explored = true;
+						
+						this.removeWallBetweenCells(currentCell, chosenNeighbor);
+						
+						stack.push(chosenNeighbor);
+					}else{
+						stack.pop();
+					}
+				}
+				
+				var path = [];
+				while(!!stack.length){
+					path.push(stack.pop())
+				}
+				return path;
+			}
+			
+			this.draw = function (){
+				var cellSize = canvas.width / this.cells.length;
+				
+				for(var y = 0; y < this.cells.length; y++){
+					for(var x = 0; x < this.cells[y].length; x++){
+						this.cells[y][x].draw(cellSize);
+					}
+				}
+				
+				ctx.strokeStyle = "#F00";
+				var solvedPath = this.solvedPath();
+				for(var sp = 1; sp < solvedPath.length; sp++){
+					ctx.beginPath();
+					ctx.moveTo(solvedPath[sp - 1].x * cellSize + cellSize/2, solvedPath[sp - 1].y * cellSize + cellSize/2);
+					ctx.lineTo(solvedPath[sp].x * cellSize + cellSize/2, solvedPath[sp].y * cellSize + cellSize/2);
+					ctx.stroke();
+				}
+			};
+		}
+	
+		function Main(){
+			canvas = document.getElementById('gameCanvas');
+			if(canvas.getContext){
+				//init canvas
+				ctx = canvas.getContext('2d');
+				
+				maze = new Maze(5, 5);
+				maze.createMaze();
+				maze.draw();
+				
+				// 1000 = 1 sec
+                //gameLoop = setInterval(Loop, 75);
+			}
+		}
+		
+		function Loop(){
+			
+		}
+		
+		function Update(){
+			
+		}
+		
+		function Draw(){
+			//clear
+			//ctx.clearRect(0, 0, canvas.width, canvas.height);
+		}
+		
+		function shuffle(array) {
+		  var currentIndex = array.length, temporaryValue, randomIndex;
+
+		  // While there remain elements to shuffle...
+		  while (0 !== currentIndex) {
+
+			// Pick a remaining element...
+			randomIndex = Math.floor(Math.random() * currentIndex);
+			currentIndex -= 1;
+
+			// And swap it with the current element.
+			temporaryValue = array[currentIndex];
+			array[currentIndex] = array[randomIndex];
+			array[randomIndex] = temporaryValue;
+		  }
+
+		  return array;
+		}
+	</script>
+</head>
+<body onload="Main();">
+	<table>
+		<td>
+			<canvas id="gameCanvas" width="600" height="600" style="border:1px solid black;">
+				Browser does not support canvas.
+			</canvas>
+		</td>
+	</table>
+</body>
+</html>

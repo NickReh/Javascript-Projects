@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Fractals</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script type="text/javascript">
+	var canvas;
+	var ctx;
+	var loopVar;
+	var loopCounter = 0;
+	var increment = 1;
+	//Triangle Variables
+	var pointA = {x: 300, y: 5};
+	var pointB = {x: 5, y: 595};
+	var pointC = {x: 595, y: 595};
+	var midPoint;
+	var isTri = false;
+	//Carpet Variables
+	var pointX;
+	var pointY;
+	var isCarpet = false;
+	//L Variables
+	var savedState;
+	var str = "";
+	var isLTree = false;
+	var isLTri = false;
+	var isDragon = false;
+	
+	$(function(){
+		canvas = document.getElementById('gameCanvas');
+		ctx = canvas.getContext('2d');
+		
+		$('#ddlFractals').change(function(){
+			clearInterval(loopVar);
+			isTri = false;
+			isCarpet = false;
+			isLTree = false;
+			isLTri = false;
+			ctx.fillStyle = "#FFFFFF";
+			ctx.fillRect(0,0,canvas.width, canvas.height);
+			switch($(this).val()){
+				case "Triangle":
+					isTri = true;
+					midPoint = {x: Math.random() * 600, y: Math.random() * 600};
+					while(!PointInTriangle(midPoint, pointA, pointB, pointC)){
+						midPoint = {x: Math.random() * 600, y: Math.random() * 600};
+					}
+					increment = parseInt($("#level").text());
+					loopCounter = 0;
+					loopVar = setInterval(DrawTriangle, 1);
+					break;
+				case "LTriangle":
+					isLTri = true;
+					increment = parseInt($("#level").text());
+					str = RecurseLTri("A", increment + 2);
+					loopCounter = 0;
+					savedState = [];
+					loopVar = setInterval(DrawLTri, 10);
+					break;
+				case "Carpet":
+					isCarpet = true;
+					pointX = 0;
+					pointY = 0;
+					increment = parseInt($("#level").text());
+					loopCounter = 0;
+					loopVar = setInterval(DrawCarpet, 1);
+					break;
+				case "LTree":
+					isLTree = true;
+					increment = parseInt($("#level").text());
+					str = RecurseLTree("0", increment);
+					loopCounter = 0;
+					savedState = [];
+					loopVar = setInterval(DrawLTree, 10);
+					break;
+				case "Dragon":
+					isDragon = true;
+					increment = parseInt($("#level").text());
+					str = RecurseDragon("FX", increment + 6);
+					loopCounter = 0;
+					savedState = [];
+					loopVar = setInterval(DrawDragon, 10);
+					break;
+			}
+		});
+		
+		$("#btnLess").click(function(){
+			var value = parseInt($("#level").text());
+			value--;
+			if(value == 0)
+				value = 1;
+			$("#level").html(value);
+			$("#ddlFractals").change();
+		});
+		
+		$("#btnMore").click(function(){
+			var value = parseInt($("#level").text());
+			value++;
+			if(value == 6)
+				value = 5;
+			$("#level").html(value);
+			$("#ddlFractals").change();
+		});
+	});
+	
+	//Triangle Functions
+	function DrawTriangle(){
+		if(loopCounter <= 1000 + (2500 * increment) && isTri){
+			var triPoint;
+			var rnd = Math.random();
+			if(rnd < .333)
+				triPoint = pointA;
+			else if(rnd < .666)
+				triPoint = pointB;
+			else
+				triPoint = pointC;
+			midPoint = {x: (midPoint.x + triPoint.x)/2, y: (midPoint.y + triPoint.y)/2};
+			ctx.beginPath();
+			ctx.fillStyle = "#"+ Math.random().toString(16).substring(2,8);//"#CC44DC";
+			ctx.fillRect(midPoint.x, midPoint.y, 11 - (increment*2), 11 - (increment*2));
+			document.getElementById("numPoints").innerHTML = loopCounter;
+			
+			loopCounter++;
+		}
+		else{
+			clearInterval(loopVar);
+		}
+	}
+	function PointInTriangle(p, pointA, pointB, pointC){
+		return SameSide(p, pointA, pointB, pointC) && SameSide(p, pointB, pointA, pointC) && SameSide(p, pointC, pointA, pointB);
+	}
+	function SameSide(p1, p2, a, b){
+		var cp1 = CrossProduct({x: b.x - a.x, y: b.y - a.y}, {x: p1.x - a.x, y: p1.y - a.y});
+		var cp2 = CrossProduct({x: b.x - a.x, y: b.y - a.y}, {x: p2.x - a.x, y: p2.y - a.y});
+		return DotProduct(cp1, cp2) >= 0;
+	}
+	
+	//Carpet Functions
+	function DrawCarpet(){
+		var mult = Math.ceil(600/Math.pow(3, increment));
+		if(pointY < 600 && isCarpet){
+			var pointVal = DrawPoint(pointX/mult, pointY/mult);
+			if(pointVal > 0){
+				loopCounter++;
+				ctx.beginPath();
+				ctx.fillStyle = "#CC44DC";
+				ctx.fillRect(pointX, pointY, mult * pointVal, mult * pointVal);
+				document.getElementById("numPoints").innerHTML = loopCounter;
+			}
+			pointX += mult;
+			if(pointX > 600){
+				pointX = 0;
+				pointY += mult;
+			}
+		}
+		else{
+			clearInterval(loopVar);
+		}
+	}
+	function DrawPoint(x, y){
+		var value = 0;
+		while(x > 0 || y > 0){
+			if(x % 3 == 1 && y % 3 == 1){
+				return Math.pow(3, value);
+			}
+			x = x / 3;
+			y = y / 3;
+			value++;
+		}
+		return 0;
+	}
+	
+	function DrawLTree(){
+		if(loopCounter < str.length && isLTree){
+			ctx.strokeStyle = "#000000";
+			ctx.save();
+			ctx.translate(300, 595);
+			for(var i = 0; i < savedState.length; i++){
+				ctx.translate(0, savedState[i].y);
+				ctx.rotate(savedState[i].angle);
+			}
+			switch(str.charAt(loopCounter)){
+				case "1":
+					ctx.beginPath();
+					ctx.moveTo(0, 0);
+					ctx.lineTo(0, -80/increment);
+					ctx.stroke();
+					savedState.push({y: -80/increment, angle: 0, saveSpot: false});
+					break;
+				case "0":
+					ctx.beginPath();
+					ctx.moveTo(0, 0);
+					ctx.lineTo(0, -40/increment);
+					ctx.stroke();
+					savedState.push({y: -40/increment, angle: 0, saveSpot: false});
+					break;
+				case "[":
+					ctx.rotate(-Math.PI / 4);
+					savedState.push({y: 0, angle: -Math.PI / 4, saveSpot: true});
+					break;
+				case "]":
+					var state = savedState.pop();
+					while(!state.saveSpot){
+						ctx.translate(0, -state.y);
+						ctx.rotate(-state.angle);
+						state = savedState.pop();
+					}
+					ctx.rotate(Math.PI / 4);
+					savedState.push({y: 0, angle: Math.PI / 4, saveSpot: false});
+					break;
+			}
+			loopCounter++;
+			ctx.restore();
+			document.getElementById("numPoints").innerHTML = loopCounter;
+		}
+		else{
+			clearInterval(loopVar);
+		}
+	}
+	
+	function DrawLTri(){
+		debugger;
+		if(loopCounter < str.length && isLTri){
+			ctx.strokeStyle = "#000000";
+			ctx.save();
+			ctx.translate(5, 595);
+			for(var i = 0; i < savedState.length; i++){
+				ctx.translate(savedState[i].x, 0);
+				ctx.rotate(savedState[i].angle);
+			}
+			switch(str.charAt(loopCounter)){
+				case "A":
+				case "B":
+					ctx.beginPath();
+					ctx.moveTo(0, 0);
+					ctx.lineTo(20/increment, 0);
+					ctx.stroke();
+					savedState.push({x: 20/increment, angle: 0});
+					break;
+				case "+":
+					ctx.rotate(-Math.PI / 3);
+					savedState.push({x: 0, angle: Math.PI / 3});
+					break;
+				case "-":
+					ctx.rotate(Math.PI / 3);
+					savedState.push({x: 0, angle: -Math.PI / 3});
+					break;
+			}
+			loopCounter++;
+			ctx.restore();
+			document.getElementById("numPoints").innerHTML = loopCounter;
+		}
+		else{
+			clearInterval(loopVar);
+		}
+	}
+	
+	function DrawDragon(){
+		debugger;
+		if(loopCounter < str.length && isDragon){
+			ctx.strokeStyle = "#000000";
+			ctx.save();
+			ctx.translate(175 + increment * 25, 340 - (30 * increment));
+			for(var i = 0; i < savedState.length; i++){
+				ctx.translate(savedState[i].x, 0);
+				ctx.rotate(savedState[i].angle);
+			}
+			switch(str.charAt(loopCounter)){
+				case "F":
+					ctx.beginPath();
+					ctx.moveTo(0, 0);
+					ctx.lineTo(30/increment, 0);
+					ctx.stroke();
+					savedState.push({x: 30/increment, angle: 0});
+					break;
+				case "+":
+					ctx.rotate(-Math.PI / 2);
+					savedState.push({x: 0, angle: Math.PI / 2});
+					break;
+				case "-":
+					ctx.rotate(Math.PI / 2);
+					savedState.push({x: 0, angle: -Math.PI / 2});
+					break;
+			}
+			loopCounter++;
+			ctx.restore();
+			document.getElementById("numPoints").innerHTML = loopCounter;
+		}
+		else{
+			clearInterval(loopVar);
+		}
+	}
+	
+	//L-System Functions
+	function RecurseLTree(str, numRecurse){
+		if(numRecurse == 0)
+			return str;
+		var newString = "";
+		for(var i = 0; i < str.length; i++){
+			switch(str.charAt(i)){
+				case "1":
+					newString += "11";
+					break;
+				case "0":
+					newString += "1[0]0";
+					break;
+				case "[":
+					newString += "[";
+					break;
+				case "]":
+					newString += "]";
+					break;
+			}
+		}
+		return RecurseLTree(newString, --numRecurse);
+	}
+	function RecurseLTri(str, numRecurse){
+		if(numRecurse == 0)
+			return str;
+		var newString = "";
+		for(var i = 0; i < str.length; i++){
+			switch(str.charAt(i)){
+				case "A":
+					newString += "B-A-B";
+					break;
+				case "B":
+					newString += "A+B+A";
+					break;
+				case "+":
+					newString += "+";
+					break;
+				case "-":
+					newString += "-";
+					break;
+			}
+		}
+		return RecurseLTri(newString, --numRecurse);
+	}
+	function RecurseDragon(str, numRecurse){
+		if(numRecurse == 0)
+			return str;
+		var newString = "";
+		for(var i = 0; i < str.length; i++){
+			switch(str.charAt(i)){
+				case "X":
+					newString += "X+YF";
+					break;
+				case "Y":
+					newString += "FX-Y";
+					break;
+				case "+":
+					newString += "+";
+					break;
+				case "-":
+					newString += "-";
+					break;
+				case "F":
+					newString += "F";
+					break;
+			}
+		}
+		return RecurseDragon(newString, --numRecurse);
+	}
+	
+	//Math Functions
+	function CrossProduct(a, b){
+		return {x: a.x * b.y, y: -a.y * b.x};
+	}
+	function DotProduct(a, b){
+		return a.x * b.x + a.y * b.y;
+	}
+	
+	function OnLoad(){
+		midPoint = {x: Math.random() * 600, y: Math.random() * 600};
+		while(!PointInTriangle(midPoint, pointA, pointB, pointC)){
+			midPoint = {x: Math.random() * 600, y: Math.random() * 600};
+		}
+		increment = parseInt($("#level").text());
+		loopCounter = 0;
+		isTri = true;
+		loopVar = setInterval(DrawTriangle, 1);
+	}
+</script>
+</head>
+<body onload="OnLoad();">
+	<table>
+		<tr>
+			<td>
+				<canvas id="gameCanvas" width="600" height="600" style="border:1px solid black;">
+					Browser does not support canvas.
+				</canvas>
+			</td>
+			<td valign="top">
+				<table>
+					<tr>
+						<td>
+							Fractal:
+						</td>
+						<td>
+							<select id="ddlFractals">
+								<option value="Triangle">Sierpinski Triangle</option>
+								<option value="LTriangle">L-System Sierpinski Triangle</option>
+								<option value="Carpet">Sierpinski Carpet</option>
+								<option value="LTree">L-System Tree</option>
+								<option value="Dragon">L-System Dragon Curve</option>
+							</select>
+						</td>
+					</tr>
+					<tr><td>&nbsp;</td></tr>
+					<tr>
+						<td>
+							Level of Detail:
+						</td>
+						<td>
+							<button id="btnLess" type="button"><-</button>
+							&nbsp;&nbsp;<span id="level">1</span>&nbsp;&nbsp;
+							<button id="btnMore" type="button">-></button>
+						</td>
+					</tr>
+					<tr><td>&nbsp;</td></tr>
+					<tr>
+						<td>
+							Number of points/lines:
+						</td>
+						<td>
+							<span id="numPoints">0</span>
+						</td>
+					</tr>
+				</table>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>

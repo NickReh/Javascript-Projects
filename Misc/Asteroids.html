@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Game</title>
+	<script type="text/javascript">
+		//global variables.
+		var ctx;
+		var canvas;
+		var endGame = false;
+		var pause = false;
+		var myShip;
+		var gameLoop;
+		var UP=false, RIGHT=false, DOWN=false, LEFT=false;
+		var bullets = [];
+		var asteroids = [];
+		var explosions = [];
+		var score = 0;
+		var lives = 3;
+		var startNum = 5;
+		
+		//objects
+		function Asteroid(aveRad, centerX, centerY){
+			this.centerX = centerX;
+			this.centerY = centerY;
+			this.aveRad = aveRad;
+			this.angle = 0;
+			this.velX = Math.random() * 8 - 4;
+			this.velY = Math.random() * 8 - 4;
+			if(this.velX == 0 && this.velY == 0){
+				this.velX = .1;
+				this.velY = -.15;
+			}
+			this.active = true;
+			this.p1x = (Math.random() * aveRad / 2 - aveRad / 10 + aveRad) * Math.cos(0) ;
+			this.p1y = (Math.random() * aveRad / 2 - aveRad / 2 + aveRad) * Math.sin(0);
+			this.p2x = (Math.random() * aveRad / 2 - aveRad / 10 + aveRad) * Math.cos(.698);
+			this.p2y = (Math.random() * aveRad / 2 - aveRad / 3 + aveRad) * Math.sin(.698);
+			this.p3x = (Math.random() * aveRad / 2 - aveRad / 10 + aveRad) * Math.cos(.698*2);
+			this.p3y = (Math.random() * aveRad / 2 - aveRad / 3 + aveRad) * Math.sin(.698*2);
+			this.p4x = (Math.random() * aveRad / 2 - aveRad / 10 + aveRad) * Math.cos(.698*3);
+			this.p4y = (Math.random() * aveRad / 2 - aveRad / 3 + aveRad) * Math.sin(.698*3);
+			this.p5x = (Math.random() * aveRad / 4 - aveRad / 10 + aveRad) * Math.cos(.698*4);
+			this.p5y = (Math.random() * aveRad / 4 - aveRad / 10 + aveRad) * Math.sin(.698*4);
+			this.p6x = (Math.random() * aveRad / 4 - aveRad / 2 + aveRad) * Math.cos(.698*5);
+			this.p6y = (Math.random() * aveRad / 4 - aveRad / 10 + aveRad) * Math.sin(.698*5);
+			this.p7x = (Math.random() * aveRad / 4 - aveRad / 10 + aveRad) * Math.cos(.698*6);
+			this.p7y = (Math.random() * aveRad / 4 - aveRad / 2 + aveRad) * Math.sin(.698*6);
+			this.p8x = (Math.random() * aveRad / 4 - aveRad / 10 + aveRad) * Math.cos(.698*7);
+			this.p8y = (Math.random() * aveRad / 4 - aveRad / 3 + aveRad) * Math.sin(.698*7);
+			this.p9x = (Math.random() * aveRad / 4 - aveRad / 10 + aveRad) * Math.cos(.698*8);
+			this.p9y = (Math.random() * aveRad / 4 - aveRad / 2 + aveRad) * Math.sin(.698*8);
+			this.turnSpeed = (Math.random() - .5) / 5;
+			this.update = function(){
+				this.angle += this.turnSpeed == 0 ? .1 : this.turnSpeed;
+				this.centerX += this.velX;
+				this.centerY += this.velY;
+				if(this.centerX + this.aveRad < -5)
+					this.centerX = 605 + this.aveRad;
+				if(this.centerX - this.aveRad > 605)
+					this.centerX = -5 - this.aveRad;
+				if(this.centerY + this.aveRad < -5)
+					this.centerY = 605 + this.aveRad;
+				if(this.centerY - this.aveRad > 605)
+					this.centerY = -5 - this.aveRad;
+			}
+			this.draw = function(){
+				ctx.save();
+				ctx.translate(this.centerX, this.centerY);
+				ctx.rotate(this.angle);
+				ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
+				ctx.strokeStyle = "#DDDDDD";
+				ctx.beginPath();
+				ctx.moveTo(this.p1x, this.p1y);
+				ctx.lineTo(this.p2x, this.p2y);
+				ctx.lineTo(this.p3x, this.p3y);
+				ctx.lineTo(this.p4x, this.p4y);
+				ctx.lineTo(this.p5x, this.p5y);
+				ctx.lineTo(this.p6x, this.p6y);
+				ctx.lineTo(this.p7x, this.p7y);
+				ctx.lineTo(this.p8x, this.p8y);
+				ctx.lineTo(this.p9x, this.p9y);
+				ctx.closePath();
+				ctx.stroke();
+				ctx.fill();
+				ctx.restore();
+			}
+		} 
+		
+		function Explosion(startX, startY){
+			this.x = startX;
+			this.y = startY;
+			this.active = true;
+			this.life = 1;
+			//this.color = '#' + Math.random().toString(16).substring(2, 8)
+			this.red = Math.random() * 130 + 125;
+			this.green = Math.random() * 130 + 125;
+			this.blue = Math.random() * 130 + 125;
+			this.update = function(){
+				this.life++;
+				if(this.life > 11)
+					this.active = false;
+			}
+			this.draw = function(){
+				ctx.strokeStyle = 'rgb(' + Math.round(this.red/(this.life/4)) + ',' + Math.round(this.green/(this.life/4)) + ',' + Math.round(this.blue/(this.life/4)) + ')';
+				ctx.lineWidth = 2;
+				for(var i = 0; i < 7; i++){
+					ctx.beginPath();
+					ctx.moveTo(this.x + this.life * Math.cos(i * .898), this.y + this.life * Math.sin(i * .898));
+					ctx.lineTo(this.x + (this.life + 8) * Math.cos(i * .898), this.y + (this.life + 8) * Math.sin(i * .898));
+					ctx.stroke();
+				}
+			}
+		}
+
+		function Bullet(){
+			this.x = myShip.x;
+			this.y = myShip.y;
+			this.shootAngle = myShip.angle;
+			this.active = true;
+			this.update = function(){
+				this.x -= Math.cos(this.shootAngle) * 20;
+				this.y -= Math.sin(this.shootAngle) * 20;
+				if(this.x < -4 || this.x > 604 || this.y < -4 || this.y > 604)
+					this.active = false;
+			}
+			this.draw = function(){
+				ctx.save();
+				ctx.beginPath();
+				ctx.fillStyle = "#CC44DC";
+				ctx.fillRect(this.x-1, this.y-1, 3, 3);
+				ctx.restore();
+			}
+		}
+		
+		function Ship(){
+			this.x = canvas.width/2;
+			this.y = canvas.height/2;
+			this.thrust = 0;
+			this.angle = 0;
+			this.velX = 0;
+			this.velY = 0;
+			this.velDecay = .98;
+			this.drawThrust = false;
+			this.active = false;
+			this.update = function(){
+				if(UP){
+					this.thrust += 0.2;
+					if(this.thrust > 8){
+						this.thrust = 8;
+					}
+					this.velX += Math.cos(this.angle) * this.thrust;
+					if(this.velX > 10)
+						this.velX = 10;
+					if(this.velX < -10)
+						this.velX = -10
+					this.velY += Math.sin(this.angle) * this.thrust;
+					if(this.velY > 10)
+						this.velY = 10;
+					if(this.velY < -10)
+						this.velY = -10;
+					this.drawThrust = true;
+				}else{
+					this.thrust = 0;
+					this.velX *= this.velDecay;
+					this.velY *= this.velDecay;
+					this.drawThrust = false;
+				}
+				if(DOWN){
+				
+				}
+				if(LEFT){
+					this.angle -= (Math.PI/3)/4;
+				}
+				if(RIGHT){
+					this.angle += (Math.PI/3)/4;
+				}
+				this.x -= this.velX;
+				this.y -= this.velY;
+				if(this.x < -8)
+					this.x = 608;
+				if(this.x > 608)
+					this.x = -8;
+				if(this.y < -8)
+					this.y = 608;
+				if(this.y > 608)
+					this.y = -8;
+					
+				if(!this.active){
+					var noHit = true;
+					for(var i = 0; i < asteroids.length; i++){
+						if(this.x - 8 < asteroids[i].centerX + asteroids[i].aveRad * 1.5 &&
+						this.x + 8 > asteroids[i].centerX - asteroids[i].aveRad * 1.5 &&
+						this.y - 8 < asteroids[i].centerY + asteroids[i].aveRad * 1.5 &&
+						this.y + 8 > asteroids[i].centerY - asteroids[i].aveRad * 1.5){
+							noHit = false;
+						}
+					}
+					this.active = noHit;
+				}
+			}
+			this.draw = function(){
+				if(this.active){
+					ctx.save();
+					ctx.translate(this.x, this.y);  //center
+					ctx.rotate(this.angle);
+					ctx.fillStyle = "rgba(150, 255, 0, 0.3)";
+					ctx.strokeStyle = "#96FF00";
+					ctx.beginPath();
+					ctx.moveTo(-10, 0); //front
+					ctx.lineTo(5, 5);
+					ctx.lineTo(5, -5);
+					ctx.closePath();
+					ctx.stroke();
+					ctx.fill();
+					if(this.drawThrust){
+						ctx.strokeStyle = "#AA9900";
+						ctx.lineWidth = 1;
+						ctx.beginPath();
+						ctx.moveTo(5, -4);
+						ctx.lineTo(12, -4);
+						ctx.stroke();
+						ctx.beginPath();
+						ctx.moveTo(5, -2);
+						ctx.lineTo(12, -2);
+						ctx.stroke();
+						ctx.beginPath();
+						ctx.moveTo(5, 0);
+						ctx.lineTo(12, 0);
+						ctx.stroke();
+						ctx.beginPath();
+						ctx.moveTo(5, 2);
+						ctx.lineTo(12, 2);
+						ctx.stroke();
+						ctx.beginPath();
+						ctx.moveTo(5, 4);
+						ctx.lineTo(12, 4);
+						ctx.stroke();
+					}
+					ctx.restore();
+				}
+			}
+		}
+	
+		function Main(){
+			canvas = document.getElementById('gameCanvas');
+			if(canvas.getContext){
+				//init
+				ctx = canvas.getContext('2d');
+				myShip = new Ship();
+				for(var i = 0; i < startNum; i++){
+					asteroids.push(new Asteroid(50, Math.random() * 600, Math.random() * 600));
+				}
+				// 1000 = 1 sec
+                gameLoop = setInterval(Loop, 75);
+                // Add keyboard listeners.
+                window.addEventListener('keydown', keyDown, true);
+                window.addEventListener('keyup', keyUp, true);
+			}
+		}
+		
+		function Loop(){
+			if(!pause && !endGame){
+				Update();
+				Draw();
+				if(lives == 0)
+					endGame = true;
+				if(asteroids.length == 0){
+					startNum *= 2;
+					for(var i = 0; i < startNum; i++){
+						asteroids.push(new Asteroid(50, Math.random() * 600, Math.random() * 600));
+					}
+					myShip.active = false;
+				}
+				HandleCollisions();
+				document.getElementById("spScore").innerHTML = score;
+				document.getElementById("spLives").innerHTML = lives;
+			}
+			
+			if(pause)
+				document.getElementById("lblPaused").style.display = '';
+			else
+				document.getElementById("lblPaused").style.display = 'none';
+			
+			if (endGame)
+				document.getElementById("lblGameOver").style.display = '';
+			else
+				document.getElementById("lblGameOver").style.display = 'none';
+		}
+		
+		function Update(){
+			myShip.update();
+			for(var i = 0; i < bullets.length; i++){
+				bullets[i].update();
+			}
+			bullets = bullets.filter(function(bullet){
+				return bullet.active;
+			});
+			for(var i = 0; i < asteroids.length; i++){
+				asteroids[i].update();
+			}
+			asteroids = asteroids.filter(function(asteroid){
+				return asteroid.active;
+			});
+			for(var i = 0; i < explosions.length; i++){
+				explosions[i].update();
+			}
+			explosions = explosions.filter(function(explosion){
+				return explosion.active;
+			});
+		}
+		
+		function Draw(){
+			//clear
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			
+			//background
+			ctx.save();
+			ctx.fillStyle = "rgb(0,0,0)";
+			ctx.fillRect(0,0,canvas.width, canvas.height);
+			ctx.restore();
+			//objects
+			myShip.draw();
+			for(var i = 0; i < bullets.length; i++){
+				bullets[i].draw();
+			}
+			for(var i = 0; i < asteroids.length; i++){
+				asteroids[i].draw();
+			}
+			for(var i = 0; i < explosions.length; i++){
+				explosions[i].draw();
+			}
+		}
+		
+		function AsteroidHit(asteroid){
+			var newRad = 0;
+			if(asteroid.aveRad == 50)
+				newRad = 25;
+			else if(asteroid.aveRad == 25)
+				newRad = 10;
+			if(newRad != 0){
+				asteroids.push(new Asteroid(newRad, asteroid.centerX, asteroid.centerY));
+				asteroids.push(new Asteroid(newRad, asteroid.centerX, asteroid.centerY));
+				asteroids.push(new Asteroid(newRad, asteroid.centerX, asteroid.centerY));
+			}
+			explosions.push(new Explosion(asteroid.centerX, asteroid.centerY));
+			asteroid.active = false;
+		}
+		
+		function HandleCollisions(){
+			asteroids.forEach(function(asteroid){
+				bullets.forEach(function(bullet){
+					if(bullet.x - 1 < asteroid.centerX + asteroid.aveRad &&
+					bullet.x - 1 + 3 > asteroid.centerX - asteroid.aveRad &&
+					bullet.y -1  < asteroid.centerY + asteroid.aveRad &&
+					bullet.y - 1 + 3 > asteroid.centerY - asteroid.aveRad){
+						bullet.active = false;
+						AsteroidHit(asteroid);
+						score++;
+					}
+				});
+				if(myShip.x < asteroid.centerX + asteroid.aveRad &&
+				myShip.x > asteroid.centerX - asteroid.aveRad &&
+				myShip.y < asteroid.centerY + asteroid.aveRad &&
+				myShip.y > asteroid.centerY - asteroid.aveRad &&
+				myShip.active){
+					AsteroidHit(asteroid)
+					score++;
+					myShip.active = false;
+					myShip.x = canvas.width/2;
+					myShip.y = canvas.height/2;
+					myShip.velX = 0;
+					myShip.velY = 0;
+					myShip.thrust = 0;
+					myShip.angle = 0;
+					lives--;
+				}
+			});
+		}
+		
+		function keyDown(e){
+			var key = e.keyCode ? e.keyCode : e.which;
+			switch(key){
+				case 37: //left
+					LEFT = true;
+				break;
+				case 38: //up
+					UP = true;
+				break;
+				case 39: //right
+					RIGHT = true;
+				break;
+				case 40: //down
+					DOWN = true;
+				break;
+				case 80: //'p'
+					pause = !pause;
+				break;
+			}
+		}
+		
+		function keyUp(e){
+			var key = e.keyCode ? e.keyCode : e.which;
+			switch(key){
+				case 37: //left
+					LEFT = false;
+				break;
+				case 38: //up
+					UP = false;
+				break;
+				case 39: //right
+					RIGHT = false;
+				break;
+				case 40: //down
+					DOWN = false;
+				break;
+				case 32: //space
+					if(myShip.active)
+						bullets.push(new Bullet());
+				break;
+			}
+		}
+	</script>
+</head>
+<body onload="Main();">
+	<table>
+		<td>
+			<label id="lblScore">Score:&nbsp;&nbsp;<span id="spScore">0</span></label>
+			<label id="lblLives" style="margin-left:50px;margin-right:50px;">Lives:&nbsp;&nbsp;<span id="spLives">3</span></label>
+			<input type="button" value="New Game" onclick="window.location.reload()" />
+			<br />
+			<canvas id="gameCanvas" width="600" height="600" style="border:1px solid black;">
+				Browser does not support canvas.
+			</canvas>
+			<label id="lblPaused" style="position:fixed;left:270px;top:300px;display:none;color:white;font-size:250%;">Paused</label>
+			<label id="lblGameOver" style="position:fixed;left:230px;top:300px;display:none;color:white;font-size:250%;">Game Over</label>
+		</td>
+		<td>
+			Controls
+			<table>
+				<tr>
+					<td>Right Arrow:</td>
+					<td>turn right</td>
+				</tr>
+				<tr>
+					<td>Left Arrow:</td>
+					<td>turn left</td>
+				</tr>
+				<tr>
+					<td>Up Arrow:</td>
+					<td>move forward</td>
+				</tr>
+				<tr>
+					<td>Space:</td>
+					<td>shoot</td>
+				</tr>
+				<tr>
+					<td>P:</td>
+					<td>pause</td>
+				</tr>
+			</table>
+		</td>
+	</table>
+</body>
+</html>

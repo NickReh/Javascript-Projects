@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Snake</title>
+	<script type="text/javascript"> //Graph
+		var GraphNodeType = { 
+			OPEN: 0, 
+			WALL: 1 
+		};
+
+		// Creates a Graph class used in the astar search algorithm.
+		function Graph(grid) {
+			var nodes = [];
+
+			for (var x = 0; x < grid.length; x++) {
+				nodes[x] = [];
+				
+				for (var y = 0, row = grid[x]; y < row.length; y++) {
+					nodes[x][y] = new GraphNode(x, y, row[y]);
+				}
+			}
+
+			this.input = grid;
+			this.nodes = nodes;
+		}
+
+		Graph.prototype.toString = function() {
+			var graphString = "\n";
+			var nodes = this.nodes;
+			var rowDebug, row, y, l;
+			for (var x = 0, len = nodes.length; x < len; x++) {
+				rowDebug = "";
+				row = nodes[x];
+				for (y = 0, l = row.length; y < l; y++) {
+					rowDebug += row[y].type + " ";
+				}
+				graphString = graphString + rowDebug + "\n";
+			}
+			return graphString;
+		};
+
+		function GraphNode(x,y,type) {
+			this.data = { };
+			this.x = x;
+			this.y = y;
+			this.pos = {
+				x: x, 
+				y: y
+			};
+			this.type = type;
+		}
+
+		GraphNode.prototype.toString = function() {
+			return "[" + this.x + " " + this.y + "]";
+		};
+
+		GraphNode.prototype.isWall = function() {
+			return this.type == GraphNodeType.WALL;
+		};
+
+
+		function BinaryHeap(scoreFunction){
+			this.content = [];
+			this.scoreFunction = scoreFunction;
+		}
+
+		BinaryHeap.prototype = {
+			push: function(element) {
+				// Add the new element to the end of the array.
+				this.content.push(element);
+
+				// Allow it to sink down.
+				this.sinkDown(this.content.length - 1);
+			},
+			pop: function() {
+				// Store the first element so we can return it later.
+				var result = this.content[0];
+				// Get the element at the end of the array.
+				var end = this.content.pop();
+				// If there are any elements left, put the end element at the
+				// start, and let it bubble up.
+				if (this.content.length > 0) {
+					 this.content[0] = end;
+					 this.bubbleUp(0);
+				}
+				return result;
+			},
+			remove: function(node) {
+				var i = this.content.indexOf(node);
+			
+				// When it is found, the process seen in 'pop' is repeated
+				// to fill up the hole.
+				var end = this.content.pop();
+
+				if (i !== this.content.length - 1) {
+					this.content[i] = end;
+					
+					if (this.scoreFunction(end) < this.scoreFunction(node)) {
+						this.sinkDown(i);
+					}
+					else {
+						this.bubbleUp(i);
+					}
+				}
+			},
+			size: function() {
+				return this.content.length;
+			},
+			rescoreElement: function(node) {
+				this.sinkDown(this.content.indexOf(node));
+			},
+			sinkDown: function(n) {
+				// Fetch the element that has to be sunk.
+				var element = this.content[n];
+
+				// When at 0, an element can not sink any further.
+				while (n > 0) {
+
+					// Compute the parent element's index, and fetch it.
+					var parentN = ((n + 1) >> 1) - 1,
+						parent = this.content[parentN];
+					// Swap the elements if the parent is greater.
+					if (this.scoreFunction(element) < this.scoreFunction(parent)) {
+						this.content[parentN] = element;
+						this.content[n] = parent;
+						// Update 'n' to continue at the new position.
+						n = parentN;
+					}
+
+					// Found a parent that is less, no need to sink any further.
+					else {
+						break;
+					}
+				}
+			},
+			bubbleUp: function(n) {
+				// Look up the target element and its score.
+				var length = this.content.length,
+					element = this.content[n],
+					elemScore = this.scoreFunction(element);
+				
+				while(true) {
+					// Compute the indices of the child elements.
+					var child2N = (n + 1) << 1, child1N = child2N - 1;
+					// This is used to store the new position of the element,
+					// if any.
+					var swap = null;
+					// If the first child exists (is inside the array)...
+					if (child1N < length) {
+					// Look it up and compute its score.
+					var child1 = this.content[child1N],
+						child1Score = this.scoreFunction(child1);
+
+					// If the score is less than our element's, we need to swap.
+					if (child1Score < elemScore)
+						swap = child1N;
+					}
+
+					// Do the same checks for the other child.
+					if (child2N < length) {
+						var child2 = this.content[child2N],
+							child2Score = this.scoreFunction(child2);
+						if (child2Score < (swap === null ? elemScore : child1Score)) {
+							swap = child2N;
+						}
+					}
+
+					// If the element needs to be moved, swap it, and continue.
+					if (swap !== null) {
+						this.content[n] = this.content[swap];
+						this.content[swap] = element;
+						n = swap;
+					}
+
+					// Otherwise, we are done.
+					else {
+						break;
+					}
+				}
+			}
+		};
+	</script>
+    <script type="text/javascript"> 
+		//A* search
+        /* 	astar.js http://github.com/bgrins/javascript-astar
+			Implements the astar search algorithm in javascript using a binary heap
+			**Requires graph.js**
+			
+			Binary Heap taken from http://eloquentjavascript.net/appendix2.html
+			with license: http://creativecommons.org/licenses/by/3.0/
+				
+			Example Usage:
+				var graph = new Graph([
+					[0,0,0,0],
+					[1,0,0,1],
+					[1,1,0,0]
+				]);
+				var start = graph.nodes[0][0];
+				var end = graph.nodes[1][2];
+				astar.search(graph.nodes, start, end);
+				
+			See graph.js for a more advanced example
+		*/
+		 
+		var astar = {
+			init: function(grid) {
+				for(var x = 0; x < grid.length; x++) {
+					for(var y = 0; y < grid[x].length; y++) {
+						var node = grid[x][y];
+						node.f
+						node.f = 0;
+						node.g = 0;
+						node.h = 0;
+						node.visited = false;
+						node.closed = false;
+						node.debug = "";
+						node.parent = null;
+					}   
+				}
+			},
+			search: function(grid, start, end, heuristic) {
+				astar.init(grid);
+				heuristic = heuristic || astar.manhattan;
+				
+				var openList   = [];
+				openList.push(start);
+				
+				
+				var openHeap = new BinaryHeap(function(node){return node.f;});
+				openHeap.push(start);
+				
+				while(openHeap.size() > 0) {
+					
+					// Grab the lowest f(x) to process next.  Heap keeps this sorted for us.
+					var currentNode = openHeap.pop();
+					
+					// End case -- result has been found, return the traced path
+					if(currentNode == end) {
+						var curr = currentNode;
+						var ret = [];
+						while(curr.parent) {
+							ret.push(curr);
+							curr = curr.parent;
+						}
+						return ret.reverse();
+					}
+					
+					// Normal case -- move currentNode from open to closed, process each of its neighbors
+					currentNode.closed = true;
+					
+					var neighbors = astar.neighbors(grid, currentNode);
+					for(var i=0; i<neighbors.length;i++) {
+						var neighbor = neighbors[i];
+						
+						if(neighbor.closed || neighbor.isWall()) {
+							// not a valid node to process, skip to next neighbor
+							continue;
+						}
+						
+						// g score is the shortest distance from start to current node, we need to check if
+						//   the path we have arrived at this neighbor is the shortest one we have seen yet
+						// 1 is the distance from a node to it's neighbor.  This could be variable for weighted paths.
+						var gScore = currentNode.g + 1; 
+						var gScoreIsBest = false;
+						var beenVisited = neighbor.visited;
+						
+						if(!beenVisited || gScore < neighbor.g) {
+						
+							// Found an optimal (so far) path to this node.  Take score for node to see how good it is.				    
+							neighbor.visited = true;
+							neighbor.parent = currentNode;
+							neighbor.h = neighbor.h || heuristic(neighbor.pos, end.pos);
+							neighbor.g = gScore;
+							neighbor.f = neighbor.g + neighbor.h;
+							neighbor.debug = "F: " + neighbor.f + "<br />G: " + neighbor.g + "<br />H: " + neighbor.h;
+							
+							if (!beenVisited) {
+								// Pushing to heap will put it in proper place based on the 'f' value.
+								openHeap.push(neighbor);
+							}
+							else {
+								// Already seen the node, but since it has been rescored we need to reorder it in the heap
+								openHeap.rescoreElement(neighbor);
+							}
+						}
+					}
+				}
+				
+				// No result was found -- empty array signifies failure to find path
+				return [];
+			},
+			manhattan: function(pos0, pos1) {
+				// See list of heuristics: http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html
+				
+				var d1 = Math.abs (pos1.x - pos0.x);
+				var d2 = Math.abs (pos1.y - pos0.y);
+				return d1 + d2;
+			},
+			neighbors: function(grid, node) {
+				var ret = [];
+				var x = node.x;
+				var y = node.y;
+				
+				if(grid[x-1] && grid[x-1][y]) {
+					ret.push(grid[x-1][y]);
+				}
+				if(grid[x+1] && grid[x+1][y]) {
+					ret.push(grid[x+1][y]);
+				}
+				if(grid[x][y-1] && grid[x][y-1]) {
+					ret.push(grid[x][y-1]);
+				}
+				if(grid[x][y+1] && grid[x][y+1]) {
+					ret.push(grid[x][y+1]);
+				}
+				return ret;
+			}
+		};
+	</script>	
+    <script type="text/javascript">		
+        // Global variables.
+		var gameGrid;  //initialized in
+        var UP = 0; var RIGHT = 1; var DOWN = 2; var LEFT = 3;
+        var RED = 0; var YELLOW = 1;
+        var boardX = 300; // Board width.
+        var boardY = 300; // Board height.
+        var snakeBody = [new snakeCell(UP, 150, 144, false), new snakeCell(UP, 150, 150, false),
+	                   new snakeCell(UP, 150, 156, false), new snakeCell(UP, 150, 162, false),
+					   new snakeCell(LEFT, 150, 168, false), new snakeCell(LEFT, 156, 168, false),
+					   new snakeCell(DOWN, 162, 168, false), new snakeCell(DOWN, 162, 162, false),
+					   new snakeCell(RIGHT, 162, 156, false), new snakeCell(UP, 156, 156, false)];
+        var snakeDirection = 5;
+        var apples = [];
+        var mice = [];
+		var walls = []; //[new wall('vert'), new wall('vert'), new wall('horz'), new wall('horz'), new wall('horz'), new wall('horz'), new wall('vert'), new wall('vert')];
+        var score = 0;
+        var cellsToAdd = 0;
+        var endGame = false;
+        var paused = false;
+        var canvas; // Canvas element.
+        var ctx; // Canvas context.
+        var gameLoop; // Game loop time interval.
+        var rightkey = false;
+        var leftkey = false;
+        var upkey = false;
+        var downkey = false;
+
+        //create new snake cell
+        function snakeCell(cellAheadDirection, aheadX, aheadY, aheadBuried) {
+            switch (cellAheadDirection) {
+                case UP:
+                    this.X = aheadX;
+                    this.Y = aheadY + 6;
+                    break;
+                case RIGHT:
+                    this.X = aheadX - 6;
+                    this.Y = aheadY;
+                    break;
+                case DOWN:
+                    this.X = aheadX;
+                    this.Y = aheadY - 6;
+                    break;
+                case LEFT:
+                    this.X = aheadX + 6;
+                    this.Y = aheadY;
+                    break;
+                default:
+                    this.X = aheadX;
+                    this.Y = aheadY + 6;
+                    break;
+            }
+            this.direction = cellAheadDirection;
+            this.buried = aheadBuried;
+        }
+
+        //create new apple
+        function apple() {
+            //if have multiple apples, check that apples are not
+            //on top of each other!
+            do {
+                var tempX = Math.floor(Math.random() * 50) * 6;
+                var tempY = Math.floor(Math.random() * 50) * 6;
+            } while (objectOnSnake(tempX, tempY) || objectOnWall(tempX, tempY));
+            this.X = tempX;
+            this.Y = tempY;
+            this.color = Math.floor(Math.random() * 2);
+        }
+
+        function objectOnSnake(x, y) {
+            for (var i = 0; i < snakeBody.length; i++) {
+                if (snakeBody[i].X == x && snakeBody[i].Y == y)
+                    return true;
+            }
+            return false;
+        }
+		
+		function objectOnWall(x, y){
+			for(var i = 0; i < walls.length; i++){
+				if(walls[i][0] == x && walls[i][1] == y)
+					return true;
+			}
+			return false;
+		}
+
+        function mouse() {
+            //TO-DO if multiple mice, check that they are not on each other
+            do {
+                var tempX = Math.floor(Math.random() * 50) * 6;
+                var tempY = Math.floor(Math.random() * 50) * 6;
+            } while (objectOnSnake(tempX, tempY) || objectOnWall(tempX, tempY));
+            this.X = tempX;
+            this.Y = tempY;
+			this.pastX = tempX;
+			this.pastY = tempY;
+			this.path = null;
+			this.stepsTillPathRecalc = 0;
+			this.stepMouseIsOn = 0;
+        }
+		
+		function addWalls(){
+			var startNodeX;
+			var startNodeY;
+			for(var i=0;i<8;i++){
+				do{
+					startNodeX = Math.floor(Math.random() * 40) * 6;
+					startNodeY = Math.floor(Math.random() * 40) * 6;
+				}while(startNodeY > 144 && startNodeY < 174 && startNodeX > 78 && startNodeX < 168);
+				walls.push([startNodeX, startNodeY]); 
+				walls.push([startNodeX+6, startNodeY]); 
+				walls.push([startNodeX+12, startNodeY]); 
+				walls.push([startNodeX+18, startNodeY]); 
+				walls.push([startNodeX+24, startNodeY]); 
+				walls.push([startNodeX+30, startNodeY]);
+				walls.push([startNodeX+36, startNodeY]);
+				walls.push([startNodeX+42, startNodeY]);
+				walls.push([startNodeX+48, startNodeY]);
+				walls.push([startNodeX+54, startNodeY]);
+				
+				do{
+					startNodeX = Math.floor(Math.random() * 40) * 6;
+					startNodeY = Math.floor(Math.random() * 40) * 6;
+				}while(startNodeY > 84 && startNodeY < 174 && startNodeX > 144 && startNodeX < 168);
+				walls.push([startNodeX, startNodeY]);
+				walls.push([startNodeX, startNodeY+6]);
+				walls.push([startNodeX, startNodeY+12]);
+				walls.push([startNodeX, startNodeY+18]);
+				walls.push([startNodeX, startNodeY+24]);
+				walls.push([startNodeX, startNodeY+30]);
+				walls.push([startNodeX, startNodeY+36]);
+				walls.push([startNodeX, startNodeY+42]);
+				walls.push([startNodeX, startNodeY+48]);
+				walls.push([startNodeX, startNodeY+54]);
+			}
+		}
+
+        // This function is called on page load.
+        function drawGameCanvas() {
+            // Get the canvas element.
+            canvas = document.getElementById("gameBoard");
+            // Make sure you got it.
+            if (canvas.getContext) {
+                // Specify 2d canvas type.
+                ctx = canvas.getContext("2d");
+				initGrid();
+				apples.push(new apple());
+				mice.push(new mouse());
+                // 1000 = 1 sec
+                gameLoop = setInterval(draw, 80);
+                // Add keyboard listeners.
+                window.addEventListener('keydown', keyDown, true);
+                window.addEventListener('keyup', keyUp, true);
+				
+				//document.getElementById("spanGrid").innerHTML = gameGrid.toString();
+            }
+        }
+		
+		function initGrid(){
+			//init grid
+			var tempGrid = [];
+			for(var x = 0; x < 50; x++){
+				var tempArr = [];
+			    for(var y = 0; y < 50; y++){
+					tempArr.push(0);
+			    }
+				tempGrid.push(tempArr);
+			}
+			addWalls();
+			//mark walls
+			for(var i = 0; i < walls.length; i++){
+				var tempX = walls[i][0]/6;
+				var tempY = walls[i][1]/6;
+				tempGrid[tempY][tempX] = 1;
+			}
+			
+			gameGrid = new Graph(tempGrid);
+		}
+
+        function draw() {
+            if (!endGame && !paused) {
+                // Clear the board.
+                ctx.clearRect(0, 0, boardX, boardY);
+
+                // Fill the board.
+                ctx.fillStyle = "black";
+                ctx.beginPath();
+                ctx.rect(0, 0, boardX, boardY);
+                ctx.closePath();
+                ctx.fill();
+
+                //change color of title
+                //var r = Math.floor(Math.random() * 255);
+                //var g = Math.floor(Math.random() * 255);
+                //var b = Math.floor(Math.random() * 255);
+                //document.getElementById("title").style.color = "rgb("+r+","+g+","+b+")";
+
+                document.getElementById("score").innerHTML = score;
+                addSnakeCell();
+                hitApple();
+                hitSelf();
+				snakeHitMouse();
+				snakeHitWalls();
+				mouseHitApple();
+                drawSnake();
+                drawApples();
+                drawMice();
+				drawWalls();
+            }
+
+            if (endGame) {
+                ctx.fillStyle = "red";
+                ctx.font = "30px Arial";
+                ctx.fillText("Game Over", 75, 145);
+            }
+        }
+
+        function addSnakeCell() {
+            if (cellsToAdd > 0) {
+                var lastSnakeCell = snakeBody[snakeBody.length - 1];
+                snakeBody.push(new snakeCell(lastSnakeCell.direction, lastSnakeCell.X, lastSnakeCell.Y, lastSnakeCell.buried));
+                cellsToAdd--;
+            }
+        }
+
+        function drawApples() {
+            for (var i = 0; i < apples.length; i++) {
+                switch (apples[i].color) {
+                    case RED:
+                        ctx.fillStyle = "#ff0000";
+                        break;
+                    case YELLOW:
+                        ctx.fillStyle = "#ffff00";
+                        break;
+                }
+                ctx.beginPath();
+                ctx.rect(apples[i].X, apples[i].Y, 6, 6);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function findClosestAppleTo(x, y) {
+            var shortestDistance = 99999;
+            var appleIndex = -1;
+            for (var i = 0; i < apples.length; i++) {
+                var tempDistance = Math.sqrt(Math.pow(apples[i].X - x, 2) + Math.pow(apples[i].Y - y, 2));
+                if (tempDistance < shortestDistance) {
+                    shortestDistance = tempDistance;
+                    appleIndex = i;
+                }
+            }
+            return apples[appleIndex];
+        }
+		
+		function drawWalls(){
+			for(var i = 0; i < walls.length; i++){
+				var tempX = walls[i][0];
+				var tempY = walls[i][1];
+				ctx.fillStyle = "#0000DD";
+				ctx.beginPath();
+				ctx.rect(tempX, tempY, 6, 6);
+				ctx.closePath();
+				ctx.fill();
+			}
+		}
+
+        function drawMice() {
+            for (var i = 0; i < mice.length; i++) {
+				//draw mouse
+                ctx.fillStyle = "#A0A0A0";
+                ctx.beginPath();
+                ctx.rect(mice[i].X, mice[i].Y, 6, 6);
+                ctx.closePath();
+                ctx.fill();
+                //move mouse
+				if(mice[i].stepsTillPathRecalc < 1){
+					var start = gameGrid.nodes[(mice[i].Y/6)][(mice[i].X/6)];
+					var end = gameGrid.nodes[(apples[i].Y/6)][(apples[i].X/6)];
+					mice[i].path = astar.search(gameGrid.nodes, start, end);
+					mice[i].stepsTillPathRecalc = mice[i].path.length;
+					mice[i].stepMouseIsOn = 0;
+				}
+				mice[i].pastX = mice[i].X;
+				mice[i].pastY = mice[i].Y;
+				mice[i].X = mice[i].path[mice[i].stepMouseIsOn].y * 6;
+				mice[i].Y = mice[i].path[mice[i].stepMouseIsOn].x * 6;
+				mice[i].stepsTillPathRecalc--;
+				mice[i].stepMouseIsOn++;
+            }
+        }
+
+        function drawSnake() {
+            // Draw the snake.
+            var aheadX = snakeBody[0].X;
+            var aheadY = snakeBody[0].Y;
+            var aheadDirection = snakeDirection;
+            var aheadBuried = snakeBody[0].buried;
+            var tempX;
+            var tempY;
+            var tempDirection;
+            var tempBuried;
+            for (var i = 0; i < snakeBody.length; i++) {
+                if (snakeBody[i].buried) {
+                    if (i == 0)
+                        ctx.strokeStyle = "#ffff00";
+                    else
+                        ctx.strokeStyle = "#ff7700";
+                    ctx.beginPath();
+                    ctx.strokeRect(snakeBody[i].X, snakeBody[i].Y, 6, 6);
+                    ctx.closePath();
+                } else {
+                    if (i == 0)
+                        ctx.fillStyle = "#33ff00";
+                    else
+                        ctx.fillStyle = "#00bb00";
+                    ctx.beginPath();
+                    ctx.rect(snakeBody[i].X, snakeBody[i].Y, 6, 6);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                if (snakeDirection != 5 && !paused) {
+                    tempX = snakeBody[i].X;
+                    tempY = snakeBody[i].Y;
+                    tempDirection = snakeBody[i].direction;
+                    tempBuried = snakeBody[i].buried;
+                    snakeBody[i].X = aheadX;
+                    snakeBody[i].Y = aheadY;
+                    snakeBody[i].direction = aheadDirection;
+                    snakeBody[i].buried = aheadBuried;
+                    aheadX = tempX;
+                    aheadY = tempY;
+                    aheadDirection = tempDirection;
+                    aheadBuried = tempBuried;
+                }
+            }
+
+            //change direction of head
+            if (snakeDirection == LEFT) {
+                snakeBody[0].X = snakeBody[0].X - 6;
+                if (snakeBody[0].X < 0)
+                    snakeBody[0].X = boardX - 6;
+            }
+            if (snakeDirection == RIGHT) {
+                snakeBody[0].X = snakeBody[0].X + 6;
+                if (snakeBody[0].X == boardX)
+                    snakeBody[0].X = 0;
+            }
+            if (snakeDirection == UP) {
+                snakeBody[0].Y = snakeBody[0].Y - 6;
+                if (snakeBody[0].Y < 0)
+                    snakeBody[0].Y = boardY - 6;
+            }
+            if (snakeDirection == DOWN) {
+                snakeBody[0].Y = snakeBody[0].Y + 6;
+                if (snakeBody[0].Y == boardY)
+                    snakeBody[0].Y = 0;
+            }
+        }
+
+        function hitApple() {
+            for (var i = 0; i < apples.length; i++) {
+                if (snakeBody[0].X == apples[i].X &&
+					snakeBody[0].Y == apples[i].Y &&
+                      !snakeBody[0].buried) {
+                    switch (apples[i].color) {
+                        case RED:
+                            score = score + 2;
+                            cellsToAdd++;
+                            break;
+                        case YELLOW:
+                            score = score + 3;
+                            cellsToAdd += 3;
+                            break;
+                    }
+                    apples[i] = new apple();
+					mice[0].stepsTillPathRecalc = 0; //if multiple mice, do for-loop here
+                    break;
+                }
+            }
+        }
+
+        function mouseHitApple() {
+            for (var i = 0; i < apples.length; i++) {
+                if (mice[0].X == apples[i].X &&
+		        mice[0].Y == apples[i].Y) {
+                    apples[i] = new apple();
+					score = score - 1;
+                    break;
+                }
+            }
+        }
+		
+		function snakeHitMouse(){
+			for (var i = 0; i < mice.length; i++) {
+                if (((snakeBody[0].X == mice[i].X && snakeBody[0].Y == mice[i].Y) ||
+				(snakeBody[0].X == mice[i].pastX && snakeBody[0].Y == mice[i].pastY)) &&
+				!snakeBody[0].buried) {
+                    mice[i] = new mouse();
+					score = score + 4;
+					cellsToAdd += 4;
+                    break;
+                }
+            }
+		}
+		
+		function snakeHitWalls(){
+			for (var i = 0; i < walls.length; i++) {
+                if (snakeBody[0].X == walls[i][0] &&
+		        snakeBody[0].Y == walls[i][1] &&
+				!snakeBody[0].buried) {
+					endGame = true;
+                    break;
+                }
+            }
+		}
+
+        function hitSelf() {
+            for (var i = 1; i < snakeBody.length; i++) {
+                if (snakeBody[0].X == snakeBody[i].X &&
+			  snakeBody[0].Y == snakeBody[i].Y &&
+              snakeBody[0].buried == snakeBody[i].buried) {
+                    endGame = true;
+                    break;
+                }
+            }
+        }
+
+        // Get key press.
+        function keyDown(evt) {
+            switch (evt.keyCode) {
+                // Left arrow. 
+                case 37:
+                    if (snakeDirection != RIGHT && !paused)
+                        snakeDirection = LEFT;
+                    //leftkey = true;
+                    break;
+                case 38:
+                    if (snakeDirection != DOWN && !paused)
+                        snakeDirection = UP;
+                    //upkey = true;
+                    break;
+                // Right arrow. 
+                case 39:
+                    if (snakeDirection != LEFT && !paused)
+                        snakeDirection = RIGHT;
+                    //rightkey = true;
+                    break;
+                case 40:
+                    if (snakeDirection != UP && snakeDirection != 5 && !paused)
+                        snakeDirection = DOWN;
+                    //downkey = true;
+                    break;
+                case 32:
+                    paused = !paused;
+                    //space
+                    //var lastSnakeCell = snakeBody[snakeBody.length-1];
+                    //snakeBody.push(new snakeCell(lastSnakeCell.direction, lastSnakeCell.X, lastSnakeCell.Y, lastSnakeCell.buried));
+                    break;
+                case 66:
+                    //b
+                    if (snakeBody[0].buried)
+                        snakeBody[0].buried = false;
+                    else
+                        snakeBody[0].buried = true;
+                    break;
+            }
+        }
+
+        function keyUp(evt) {
+
+            switch (evt.keyCode) {
+                // Left arrow. 
+                case 37:
+                    //leftkey = false;
+                    break;
+                case 38:
+                    //upkey = false;
+                    break;
+                // Right arrow. 
+                case 39:
+                    //rightkey = false;
+                    break;
+                case 40:
+                    //downkey = false;
+                    break;
+            }
+        }
+    </script>
+</head>
+<body onload="drawGameCanvas()">
+    <div style="width: 300px;">
+        <label id="title" style="position: relative; left: 100px; color: #00DD22; font-size: 3em;
+            text-align: center;">
+            Snake
+        </label>
+        <br />
+        <label>
+            Score:
+        </label>
+        <span id="score"></span>
+        <button style="float: right;" onclick="javascript:document.location.reload();">
+            New Game</button>
+        <br />
+        <div>
+            <canvas id="gameBoard" width="300" height="300"></canvas>
+        </div>
+    </div>
+	<span id="spanGrid" />
+    <div>
+        <table>
+            <tr>
+                <td colspan="2">
+                    <label style="text-decoration: underline;">
+                        Controls</label>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    Arrow Keys:
+                </td>
+                <td>
+                    Change direction of snake
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    B:
+                </td>
+                <td>
+                    Toggle snake above or below ground
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    Space:
+                </td>
+                <td>
+                    Pause/Unpause
+                </td>
+            </tr>
+            <tr>
+                <td>
+                </td>
+                <td>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

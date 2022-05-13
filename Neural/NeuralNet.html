@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Neural Nick</title>
+	<script type="text/javascript" src="BackPropNet.js"></script>
+	<script type="text/javascript">	
+		//Global Vars
+		var brain, world, nick, view, canvasMain, ctxM, canvasView, ctxV, canvasBrain, ctxB;
+		var pixelSize = 4;
+		var screenSize = 600;
+		
+		function Main(){
+			brain = new Brain();
+			brain.Init();
+			world = new World();
+			world.Init();
+			nick = new Nick();
+			view = new View();
+			
+			canvasMain = document.getElementById('gameCanvas');
+			canvasView = document.getElementById('viewCanvas');
+			canvasBrain = document.getElementById('brainCanvas');
+			if(canvasMain.getContext && canvasView.getContext && canvasBrain.getContext){
+				ctxM = canvasMain.getContext('2d');
+				ctxV = canvasView.getContext('2d');
+				ctxB = canvasBrain.getContext('2d');
+				// 1000 = 1 sec
+                var gameLoop = setInterval(Loop, 120);
+			}
+		}
+		function Loop(){
+			if(!nick.IsSpinning()){
+				Draw();
+				Update();
+			}
+		}
+		
+		function Draw(){
+			world.Draw();
+			nick.Draw();
+			view.Draw();
+		}
+		
+		function Update(){
+			world.Update();
+			nick.Update();
+			view.Update();
+			UpdateBrain();
+		}
+		
+		function World(){
+			this.totalSpaces;
+			this.cellsPerRow = screenSize / pixelSize;
+			this.grid = [];
+			this.Init = function (){
+				for(var row = 0; row < screenSize/pixelSize; row++){
+					for(var col = 0; col < screenSize/pixelSize; col++){
+						if(row <= 3 || row >= screenSize/pixelSize - 4 || col <= 3 || col >= screenSize/pixelSize - 4 ||
+							Math.random() < .01){
+							this.grid[row*this.cellsPerRow + col] = -1;
+							this.grid[row*this.cellsPerRow + col + 1] = -1;
+							this.grid[(row+1)*this.cellsPerRow + col] = -1;
+							this.grid[(row+1)*this.cellsPerRow + col + 1] = -1;
+						}
+						else if(Math.random() < .005){
+							this.grid[row*this.cellsPerRow + col] = 1;
+							this.grid[row*this.cellsPerRow + col + 1] = 1;
+							this.grid[(row+1)*this.cellsPerRow + col] = 1;
+							this.grid[(row+1)*this.cellsPerRow + col + 1] = 1;
+						}
+						else if (!this.grid[row*this.cellsPerRow + col]){
+							this.grid[row*this.cellsPerRow + col] = 0;
+						}
+					}
+				}
+			}
+			this.Draw = function (){
+				for(var row = 0; row < screenSize/pixelSize; row++){
+					for(var col = 0; col < screenSize/pixelSize; col++){
+						var pos = row*this.cellsPerRow + col;
+						if(this.grid[pos] == -1){
+							ctxM.fillStyle = "#A52A2A";
+							ctxM.fillRect(col*pixelSize, row*pixelSize, pixelSize, pixelSize);
+						}
+						else if(this.grid[pos] == 0){
+							ctxM.fillStyle = "#FFFFFF";
+							ctxM.fillRect(col*pixelSize, row*pixelSize, pixelSize, pixelSize);
+						}
+						else if(this.grid[pos] == 1){
+							ctxM.fillStyle = "#22FF66";
+							ctxM.fillRect(col*pixelSize, row*pixelSize, pixelSize, pixelSize);
+						}
+					}
+				}
+			}
+			this.Update = function (){
+			
+			}
+		}
+		
+		function Nick(){
+			this.headPos = {row: screenSize/2/pixelSize, column: screenSize/2/pixelSize};
+			this.facingPos = ["u", "ur", "r", "dr", "d", "dl", "l", "ul"];
+			this.facing = 0;
+			this.lastMoves = [];
+			this.cellsPerRow = world.cellsPerRow;
+			
+			this.GetNicksView = function (){
+				var g = world.grid;
+				var cpr = world.cellsPerRow;
+				var r = this.headPos.row;
+				var c = this.headPos.column;
+				var ng;
+				switch(this.facing){
+					case 0: //up
+						ng = [g[(r-4)*cpr+(c-2)], g[(r-4)*cpr+(c-1)], g[(r-4)*cpr+c], g[(r-4)*cpr+(c+1)], g[(r-4)*cpr+(c+2)],
+							  g[(r-3)*cpr+(c-2)], g[(r-3)*cpr+(c-1)], g[(r-3)*cpr+c], g[(r-3)*cpr+(c+1)], g[(r-3)*cpr+(c+2)],
+							  g[(r-2)*cpr+(c-2)], g[(r-2)*cpr+(c-1)], g[(r-2)*cpr+c], g[(r-2)*cpr+(c+1)], g[(r-2)*cpr+(c+2)],
+							  g[(r-1)*cpr+(c-2)], g[(r-1)*cpr+(c-1)], g[(r-1)*cpr+c], g[(r-1)*cpr+(c+1)], g[(r-1)*cpr+(c+2)],
+							      g[r*cpr+(c-2)],    g[r*cpr+(c-1)],                     g[r*cpr+(c+1)],     g[r*cpr+(c+2)]];
+						break;
+					case 1: //up-right
+						ng = [g[(r-6)*this.cellsPerRow+(c+2)], g[(r-5)*this.cellsPerRow+(c+3)], g[(r-4)*this.cellsPerRow+(c+4)], g[(r-3)*this.cellsPerRow+(c+5)], g[(r-2)*this.cellsPerRow+(c+6)],
+							  g[(r-5)*this.cellsPerRow+(c+1)], g[(r-4)*this.cellsPerRow+(c+2)], g[(r-3)*this.cellsPerRow+(c+3)], g[(r-2)*this.cellsPerRow+(c+4)], g[(r-1)*this.cellsPerRow+(c+5)],
+							  g[(r-4)*this.cellsPerRow+c],     g[(r-3)*this.cellsPerRow+(c+1)], g[(r-2)*this.cellsPerRow+(c+2)], g[(r-1)*this.cellsPerRow+(c+3)],     g[r*this.cellsPerRow+(c+4)],
+							  g[(r-3)*this.cellsPerRow+(c-1)], g[(r-2)*this.cellsPerRow+c],     g[(r-1)*this.cellsPerRow+(c+1)],     g[r*this.cellsPerRow+(c+2)], g[(r+1)*this.cellsPerRow+(c+3)],
+							  g[(r-2)*this.cellsPerRow+(c-2)], g[(r-1)*this.cellsPerRow+(c-1)],                                  g[(r+1)*this.cellsPerRow+(c+1)], g[(r+2)*this.cellsPerRow+(c+2)]];
+						break;
+					case 2: //right
+						ng = [g[(r-2)*this.cellsPerRow+(c+4)], g[(r-1)*this.cellsPerRow+(c+4)], g[r*this.cellsPerRow+(c+4)], g[(r+1)*this.cellsPerRow+(c+4)], g[(r+2)*this.cellsPerRow+(c+4)],
+							  g[(r-2)*this.cellsPerRow+(c+3)], g[(r-1)*this.cellsPerRow+(c+3)], g[r*this.cellsPerRow+(c+3)], g[(r+1)*this.cellsPerRow+(c+3)], g[(r+2)*this.cellsPerRow+(c+3)],
+							  g[(r-2)*this.cellsPerRow+(c+2)], g[(r-1)*this.cellsPerRow+(c+2)], g[r*this.cellsPerRow+(c+2)], g[(r+1)*this.cellsPerRow+(c+2)], g[(r+2)*this.cellsPerRow+(c+2)],
+							  g[(r-2)*this.cellsPerRow+(c+1)], g[(r-1)*this.cellsPerRow+(c+1)], g[r*this.cellsPerRow+(c+1)], g[(r+1)*this.cellsPerRow+(c+1)], g[(r+2)*this.cellsPerRow+(c+1)],
+							  g[(r-2)*this.cellsPerRow+c],     g[(r-1)*this.cellsPerRow+c],                                  g[(r+1)*this.cellsPerRow+c],     g[(r+2)*this.cellsPerRow+c]];
+						break;
+					case 3: //down-right
+						ng = [g[(r+2)*this.cellsPerRow+(c+6)], g[(r+3)*this.cellsPerRow+(c+5)], g[(r+4)*this.cellsPerRow+(c+4)], g[(r+5)*this.cellsPerRow+(c+3)], g[(r+6)*this.cellsPerRow+(c+2)],
+							  g[(r+1)*this.cellsPerRow+(c+5)], g[(r+2)*this.cellsPerRow+(c+4)], g[(r+3)*this.cellsPerRow+(c+3)], g[(r+4)*this.cellsPerRow+(c+2)], g[(r+5)*this.cellsPerRow+(c+1)],
+							      g[r*this.cellsPerRow+(c+4)], g[(r+1)*this.cellsPerRow+(c+3)], g[(r+2)*this.cellsPerRow+(c+2)], g[(r+3)*this.cellsPerRow+(c+1)], g[(r+4)*this.cellsPerRow+c],
+							  g[(r-1)*this.cellsPerRow+(c+3)],     g[r*this.cellsPerRow+(c+2)], g[(r+1)*this.cellsPerRow+(c+1)], g[(r+2)*this.cellsPerRow+c],     g[(r+3)*this.cellsPerRow+(c-1)],
+							  g[(r-2)*this.cellsPerRow+(c+2)], g[(r-1)*this.cellsPerRow+(c+1)],                                  g[(r+1)*this.cellsPerRow+(c-1)], g[(r+2)*this.cellsPerRow+(c-2)]];
+						break;
+					case 4: //down
+						ng = [g[(r+4)*this.cellsPerRow+(c+2)], g[(r+4)*this.cellsPerRow+(c+1)], g[(r+4)*this.cellsPerRow+c], g[(r+4)*this.cellsPerRow+(c-1)], g[(r+4)*this.cellsPerRow+(c-2)],
+							  g[(r+3)*this.cellsPerRow+(c+2)], g[(r+3)*this.cellsPerRow+(c+1)], g[(r+3)*this.cellsPerRow+c], g[(r+3)*this.cellsPerRow+(c-1)], g[(r+3)*this.cellsPerRow+(c-2)],
+							  g[(r+2)*this.cellsPerRow+(c+2)], g[(r+2)*this.cellsPerRow+(c+1)], g[(r+2)*this.cellsPerRow+c], g[(r+2)*this.cellsPerRow+(c-1)], g[(r+2)*this.cellsPerRow+(c-2)],
+							  g[(r+1)*this.cellsPerRow+(c+2)], g[(r+1)*this.cellsPerRow+(c+1)], g[(r+1)*this.cellsPerRow+c], g[(r+1)*this.cellsPerRow+(c-1)], g[(r+1)*this.cellsPerRow+(c-2)],
+							      g[r*this.cellsPerRow+(c+2)],     g[r*this.cellsPerRow+(c+1)],                                  g[r*this.cellsPerRow+(c-1)],     g[r*this.cellsPerRow+(c-2)]];
+						break;
+					case 5:	//down-left
+						ng = [g[(r+6)*this.cellsPerRow+(c-2)], g[(r+5)*this.cellsPerRow+(c-3)], g[(r+4)*this.cellsPerRow+(c-4)], g[(r+3)*this.cellsPerRow+(c-5)], g[(r+2)*this.cellsPerRow+(c-6)],
+							  g[(r+5)*this.cellsPerRow+(c-1)], g[(r+4)*this.cellsPerRow+(c-2)], g[(r+3)*this.cellsPerRow+(c-3)], g[(r+2)*this.cellsPerRow+(c-4)], g[(r+1)*this.cellsPerRow+(c-5)],
+							  g[(r+4)*this.cellsPerRow+c],     g[(r+3)*this.cellsPerRow+(c-1)], g[(r+2)*this.cellsPerRow+(c-2)], g[(r+1)*this.cellsPerRow+(c-3)],     g[r*this.cellsPerRow+(c-4)],
+							  g[(r+3)*this.cellsPerRow+(c+1)], g[(r+2)*this.cellsPerRow+c],     g[(r+1)*this.cellsPerRow+(c-1)],     g[r*this.cellsPerRow+(c-2)], g[(r-1)*this.cellsPerRow+(c-3)],
+							  g[(r+2)*this.cellsPerRow+(c+2)], g[(r+1)*this.cellsPerRow+(c+1)],                                  g[(r-1)*this.cellsPerRow+(c-1)], g[(r-2)*this.cellsPerRow+(c-2)]];
+						break;
+					case 6: //left
+						ng = [g[(r+2)*this.cellsPerRow+(c-4)], g[(r+1)*this.cellsPerRow+(c-4)], g[r*this.cellsPerRow+(c-4)], g[(r-1)*this.cellsPerRow+(c-4)], g[(r-2)*this.cellsPerRow+(c-4)],
+							  g[(r+2)*this.cellsPerRow+(c-3)], g[(r+1)*this.cellsPerRow+(c-3)], g[r*this.cellsPerRow+(c-3)], g[(r-1)*this.cellsPerRow+(c-3)], g[(r-2)*this.cellsPerRow+(c-3)],
+							  g[(r+2)*this.cellsPerRow+(c-2)], g[(r+1)*this.cellsPerRow+(c-2)], g[r*this.cellsPerRow+(c-2)], g[(r-1)*this.cellsPerRow+(c-2)], g[(r-2)*this.cellsPerRow+(c-2)],
+							  g[(r+2)*this.cellsPerRow+(c-1)], g[(r+1)*this.cellsPerRow+(c-1)], g[r*this.cellsPerRow+(c-1)], g[(r-1)*this.cellsPerRow+(c-1)], g[(r-2)*this.cellsPerRow+(c-1)],
+							  g[(r+2)*this.cellsPerRow+c],     g[(r+1)*this.cellsPerRow+c],                                  g[(r-1)*this.cellsPerRow+c],     g[(r-2)*this.cellsPerRow+c]];
+						break;
+					case 7: //up-left
+						ng = [g[(r-2)*this.cellsPerRow+(c-6)], g[(r-3)*this.cellsPerRow+(c-5)], g[(r-4)*this.cellsPerRow+(c-4)], g[(r-5)*this.cellsPerRow+(c-3)], g[(r-6)*this.cellsPerRow+(c-2)],
+							  g[(r-1)*this.cellsPerRow+(c-5)], g[(r-2)*this.cellsPerRow+(c-4)], g[(r-3)*this.cellsPerRow+(c-3)], g[(r-4)*this.cellsPerRow+(c-2)], g[(r-5)*this.cellsPerRow+(c-1)],
+							      g[r*this.cellsPerRow+(c-4)], g[(r-1)*this.cellsPerRow+(c-3)], g[(r-2)*this.cellsPerRow+(c-2)], g[(r-3)*this.cellsPerRow+(c-1)], g[(r-4)*this.cellsPerRow+c],
+							  g[(r+1)*this.cellsPerRow+(c-3)],     g[r*this.cellsPerRow+(c-2)], g[(r-1)*this.cellsPerRow+(c-1)], g[(r-2)*this.cellsPerRow+c],     g[(r-3)*this.cellsPerRow+(c+1)],
+							  g[(r+2)*this.cellsPerRow+(c-2)], g[(r+1)*this.cellsPerRow+(c-1)],                                  g[(r-1)*this.cellsPerRow+(c+1)], g[(r-2)*this.cellsPerRow+(c+2)]];
+						break;
+				}
+				return ng;
+			}
+			
+			this.TurnLeft = function (){
+				switch(this.facing){
+					case 0: //up
+						this.headPos.column--;
+						break;
+					case 1:
+						this.headPos.column--;
+						break;
+					case 2: //right
+						this.headPos.row--;
+						break;
+					case 3:
+						this.headPos.row--;
+						break;
+					case 4: //down
+						this.headPos.column++;
+						break;
+					case 5:
+						this.headPos.column++;
+						break;
+					case 6: //left
+						this.headPos.row++;
+						break;
+					case 7:
+						this.headPos.row++;
+						break;
+				}
+				this.facing--;
+				if(this.facing < 0)
+					this.facing = 7;
+			}
+			this.MoveForward = function (){
+				switch(this.facing){
+					case 0:
+						this.headPos.row--;
+						break;
+					case 1:
+						this.headPos.column++;
+						this.headPos.row--;
+						break;
+					case 2:
+						this.headPos.column++;
+						break;
+					case 3:
+						this.headPos.column++;
+						this.headPos.row++;
+						break;
+					case 4:
+						this.headPos.row++;
+						break;
+					case 5:
+						this.headPos.column--;
+						this.headPos.row++;
+						break;
+					case 6:
+						this.headPos.column--;
+						break;
+					case 7:
+						this.headPos.column--;
+						this.headPos.row--;
+						break;
+				}
+			}
+			this.TurnRight = function (){
+				switch(this.facing){
+					case 0: //up
+						this.headPos.column++;
+						break;
+					case 1:
+						this.headPos.row++;
+						break;
+					case 2: //right
+						this.headPos.row++;
+						break;
+					case 3:
+						this.headPos.column--;
+						break;
+					case 4: //down
+						this.headPos.column--;
+						break;
+					case 5:
+						this.headPos.row--;
+						break;
+					case 6: //left
+						this.headPos.row--;
+						break;
+					case 7:
+						this.headPos.column++;
+						break;
+				}
+				this.facing++;
+				if(this.facing > 7)
+					this.facing = 0;
+			}
+			this.IsWallToLeft = function (){
+				var g = world.grid;
+				var r = this.headPos.row;
+				var c = this.headPos.column;
+				switch(this.facing){
+					case 0: //up
+						return g[r*this.cellsPerRow+(c-1)] === -1;
+					case 1:
+						return g[r*this.cellsPerRow+(c-1)] === -1;
+					case 2: //right
+						return g[(r-1)*this.cellsPerRow+c] === -1;
+					case 3:
+						return g[(r-1)*this.cellsPerRow+c] === -1;
+					case 4: //down
+						return g[r*this.cellsPerRow+(c+1)] === -1;
+					case 5:
+						return g[r*this.cellsPerRow+(c+1)] === -1;
+					case 6: //left
+						return g[(r+1)*this.cellsPerRow+c] === -1;
+					case 7:
+						return g[(r+1)*this.cellsPerRow+c] === -1;
+				}
+			}
+			this.IsWallInFront = function (){
+				var g = world.grid;
+				var r = this.headPos.row;
+				var c = this.headPos.column;
+				switch(this.facing){
+					case 0: //up
+						return g[(r-1)*this.cellsPerRow+c] === -1;
+					case 1:
+						return g[(r-1)*this.cellsPerRow+(c+1)] === -1;
+					case 2: //right
+						return g[r*this.cellsPerRow+(c+1)] === -1;
+					case 3:
+						return g[(r+1)*this.cellsPerRow+(c+1)] === -1;
+					case 4: //down
+						return g[(r+1)*this.cellsPerRow+c] === -1;
+					case 5:
+						return g[(r+1)*this.cellsPerRow+(c-1)] === -1;
+					case 6: //left
+						return g[r*this.cellsPerRow+(c-1)] === -1;
+					case 7:
+						return g[(r-1)*this.cellsPerRow+(c-1)] === -1;
+				}
+			}
+			this.IsWallToRight = function (){
+				var g = world.grid;
+				var r = this.headPos.row;
+				var c = this.headPos.column;
+				switch(this.facing){
+					case 0: //up
+						return g[r*this.cellsPerRow+(c+1)] === -1;
+					case 1:
+						return g[(r+1)*this.cellsPerRow+c] === -1;
+					case 2: //right
+						return g[(r+1)*this.cellsPerRow+c] === -1;
+					case 3:
+						return g[r*this.cellsPerRow+(c-1)] === -1;
+					case 4: //down
+						return g[r*this.cellsPerRow+(c-1)] === -1;
+					case 5:
+						return g[(r-1)*this.cellsPerRow+c] === -1;
+					case 6: //left
+						return g[(r-1)*this.cellsPerRow+c] === -1;
+					case 7:
+						return g[r*this.cellsPerRow+(c+1)] === -1;
+				}
+			}
+			this.IsSpinning = function (){
+				return this.lastMoves.length > 15 &&
+						(
+							(this.lastMoves.indexOf(0) == -1 && this.lastMoves.indexOf(1) == -1)
+							||
+							(this.lastMoves.indexOf(1) == -1 && this.lastMoves.indexOf(2) == -1)
+							||
+							(
+								this.lastMoves[0] == this.lastMoves[2] && this.lastMoves[0] == this.lastMoves[4] && this.lastMoves[0] == this.lastMoves[6] &&
+								this.lastMoves[0] == this.lastMoves[8] && this.lastMoves[0] == this.lastMoves[10] && this.lastMoves[0] == this.lastMoves[12] &&
+								this.lastMoves[0] == this.lastMoves[14]
+								&&
+								this.lastMoves[1] == this.lastMoves[3] && this.lastMoves[1] == this.lastMoves[5] && this.lastMoves[1] == this.lastMoves[7] &&
+								this.lastMoves[1] == this.lastMoves[9] && this.lastMoves[1] == this.lastMoves[11] && this.lastMoves[1] == this.lastMoves[13] &&
+								this.lastMoves[1] == this.lastMoves[15]
+								&&
+								(this.lastMoves[0] != this.lastMoves[1])
+							)
+						);
+			}
+			
+			this.Draw = function (){
+				ctxM.fillStyle = "#EBEB00";
+				var r = this.headPos.row;
+				var c = this.headPos.column;
+				ctxM.fillRect(c*pixelSize, r*pixelSize, pixelSize, pixelSize);
+				switch(this.facing){
+					case 0:
+						ctxM.fillRect(c*pixelSize, (r+1)*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect(c*pixelSize, (r+2)*pixelSize, pixelSize, pixelSize);
+						break;
+					case 1:
+						ctxM.fillRect((c-1)*pixelSize, (r+1)*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect((c-2)*pixelSize, (r+2)*pixelSize, pixelSize, pixelSize);
+						break;
+					case 2:
+						ctxM.fillRect((c-1)*pixelSize, r*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect((c-2)*pixelSize, r*pixelSize, pixelSize, pixelSize);
+						break;
+					case 3:
+						ctxM.fillRect((c-1)*pixelSize, (r-1)*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect((c-2)*pixelSize, (r-2)*pixelSize, pixelSize, pixelSize);
+						break;
+					case 4:
+						ctxM.fillRect(c*pixelSize, (r-1)*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect(c*pixelSize, (r-2)*pixelSize, pixelSize, pixelSize);
+						break;
+					case 5:
+						ctxM.fillRect((c+1)*pixelSize, (r-1)*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect((c+2)*pixelSize, (r-2)*pixelSize, pixelSize, pixelSize);
+						break;
+					case 6:
+						ctxM.fillRect((c+1)*pixelSize, r*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect((c+2)*pixelSize, r*pixelSize, pixelSize, pixelSize);
+						break;
+					case 7:
+						ctxM.fillRect((c+1)*pixelSize, (r+1)*pixelSize, pixelSize, pixelSize);
+						ctxM.fillRect((c+2)*pixelSize, (r+2)*pixelSize, pixelSize, pixelSize);
+						break;
+				}
+			}
+			this.Update = function (){
+				var nicksView = this.GetNicksView();
+				var newDirection = brain.net.Test(nicksView);
+				for(var updateCount = this.lastMoves.length; updateCount > 0; updateCount--){
+					this.lastMoves[updateCount] = this.lastMoves[updateCount - 1];
+				}
+				this.lastMoves[0] = newDirection;
+				if(this.lastMoves.length > 25){
+					this.lastMoves.pop();
+				}
+				switch(newDirection){
+					case 0:
+						if(!this.IsWallToLeft()){
+							this.TurnLeft();
+						}
+						break;
+					case 1:
+						if(!this.IsWallInFront()){
+							this.MoveForward();
+						}
+						break;
+					case 2:
+						if(!this.IsWallToRight()){
+							this.TurnRight();
+						}
+						break;
+				}
+			}
+		}
+		
+		function View(){
+			this.currentView = nick.GetNicksView();
+			this.Update = function (){
+				this.currentView = nick.GetNicksView();
+			}
+			this.Draw = function (){
+				for(var i = 0; i < this.currentView.length; i++){
+					var posX = i % 5;
+					if(i >= 22)
+						posX += 1;
+					var posY = Math.floor(i / 5);
+					switch(this.currentView[i]){
+						case -1:
+							ctxV.fillStyle = "#A52A2A";
+							break;
+						case 0:
+							ctxV.fillStyle = "#FFFFFF";
+							break;
+						case 1:
+							ctxV.fillStyle = "#22FF66";
+							break;
+					}
+					ctxV.fillRect(posX*pixelSize*3, posY*pixelSize*3, pixelSize*3, pixelSize*3);
+				}
+				ctxV.fillStyle = "#EBEB00";
+				ctxV.fillRect(2*pixelSize*3, 4*pixelSize*3, pixelSize*3, pixelSize*3);
+			}
+		}
+		
+		function Brain(){
+			this.neurons= [24, 14, 3]; //[24, 10, 10, 3];
+			
+			this.net = new BackPropagation(this.neurons, 0.6, 0.9, 0.01);  //0.3, 0.9, 0.01
+			
+			this.Init = function (){
+				var outputString = "Input:";
+				var Inputs = [[0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,-1,-1,0,
+							  0,0,-1,-1,0,
+							  0,0,  0,0],
+							  [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,-1,-1,-1,
+							  0,0,-1,-1,-1,
+							  0,0,  0,0],
+							  [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,-1,-1,0,0,
+							  0,-1,-1,0,0,
+							  0,0,  0,0],
+							  [-1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  0,0,  0,0],
+							  [-1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,0,
+							  -1,-1,-1,0,0,
+							  -1,-1,  0,0],
+							  [-1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  0,0,0,0,0,
+							  0,0,  0,0],
+							  [0,0,0,-1,-1,
+							  0,0,0,-1,-1,
+							  0,0,0,-1,-1,
+							  0,0,0,-1,-1,
+							  0,0,  -1,-1],
+							  [-1,-1,0,0,0,
+							  -1,-1,0,0,0,
+							  -1,-1,0,0,0,
+							  -1,-1,  0,0],
+							  [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  -1,-1,0,0,0,
+							  0,0,  0,0],
+							  [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  -1,-1,  0,0],
+							  [0,-1,0,0,0,
+							  0,-1,0,0,0,
+							  0,-1,0,0,0,
+							  0,-1,0,0,0,
+							  0,-1,  0,0],
+							  [0,0,0,-1,0,
+							  0,0,0,-1,0,
+							  0,0,0,-1,0,
+							  0,0,0,-1,0,
+							  0,0,  -1,0],
+							  [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,-1,-1,
+							  0,0,  0,0],
+							  [-1,-1,-1,-1,-1,
+							  -1,-1,-1,-1,-1,
+							  0,-1,-1,-1,-1,
+							  0,0,-1,-1,-1,
+							  0,0,  -1,-1]];//,
+							  /*[0,0,0,0,0,
+							  0,0,0,0,0,
+							  1,1,0,0,0,
+							  1,1,0,0,0,
+							  0,0,  0,0],
+							  [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,1,1,
+							  0,0,  1,1],
+							 [0,0,0,0,0,
+							  0,0,0,0,0,
+							  1,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,  0,0],
+							 [0,0,1,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,  0,0],
+							 [0,0,0,0,0,
+							  0,0,0,0,0,
+							  0,0,0,0,1,
+							  0,0,0,0,0,
+							  0,0,  0,0]
+							];*/
+				var Wants = [2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 0, 0, 2, 0, 1, 2];
+				for(var i = 0; i < 1000; i++){
+					for(var j = 0; j < 14; j++){
+						//console.log("Test: " + i + " " + "Want: " + Wants[j] + " Output: " + this.net.Test(Inputs[j]));
+						var Output;
+						switch(Wants[j]){
+							case 0:
+								Output = [1,0,0];
+								break;
+							case 1:
+								Output = [0,1,0];
+								break;
+							case 2:
+								Output = [0,0,1];
+								break;
+						}
+						this.net.TrainNetwork(Inputs[j], Output);
+					}
+				}
+				console.log("100 Want 1, Output = " +
+					this.net.Test([0,0,0,0,0,
+								  0,0,0,0,0,
+								  1,0,0,0,0,
+								  0,0,0,0,0,
+								  0,0,  0,0]));
+			}
+		}
+		
+		function UpdateBrain(){
+			ctxB.clearRect(0, 0, canvasBrain.width, canvasBrain.height);
+			var net = brain.net.ToJson();
+			for(var i = 0; i < net.layers.length; i++){
+				for(var j = 0; j < net.layers[i].nodes.length; j++){
+					//ctxB.beginPath();
+					//ctxB.arc(i*(canvasBrain.width/(net.layers.length-.5)) + 50, j*(canvasBrain.height/(net.layers[i].nodes.length+.5)) + canvasBrain.height/(net.layers[i].nodes.length+.5), 5, 0, 2 * Math.PI, false);
+					if(i !== 0){
+						for(var k = 0; k < net.layers[i].nodes[j].weights.length; k++){
+							ctxB.beginPath();
+							ctxB.moveTo(i*(canvasBrain.width/(net.layers.length-.8)) + 30, j*(canvasBrain.height/(net.layers[i].nodes.length+.5)) + canvasBrain.height/(net.layers[i].nodes.length+.75));
+							ctxB.lineTo((i-1)*(canvasBrain.width/(net.layers.length-.8)) + 30, k*(canvasBrain.height/(net.layers[i-1].nodes.length+.5)) + canvasBrain.height/(net.layers[i-1].nodes.length+.75));
+							ctxB.lineWidth = Math.abs(net.layers[i].nodes[j].weights[k]);
+							if(net.layers[i].nodes[j].weights[k] > 0)
+								ctxB.strokeStyle = "#00AA00";
+							else if(net.layers[i].nodes[j].weights[k] < 0)
+								ctxB.strokeStyle = "#AA0000";
+							else
+								ctxB.strokeStyle = "#AAAA00";
+							ctxB.stroke();
+						}
+						ctxB.beginPath();
+						ctxB.arc(i*(canvasBrain.width/(net.layers.length-.8)) + 30, j*(canvasBrain.height/(net.layers[i].nodes.length+.5)) + canvasBrain.height/(net.layers[i].nodes.length+.75), 10, 0, 2 * Math.PI, false);
+						
+						if((net.layers[i].nodes[j].output > .6 && i != net.layers.length -1) || j == net.winner)
+							ctxB.fillStyle = "#00AA00";
+						else
+							ctxB.fillStyle = "#FFFFFF";
+						ctxB.strokeStyle = "#000000";
+						ctxB.lineWidth = 1;
+						ctxB.fill();
+						ctxB.stroke();
+					}
+					else{
+						if(net.layers[i].nodes[j] > 0){
+							ctxB.fillStyle = "#22FF66";
+							ctxB.strokeStyle = "#000000";
+						}
+						else if(net.layers[i].nodes[j] < 0){
+							ctxB.fillStyle = "#A52A2A";
+							ctxB.strokeStyle = "#000000";
+						}
+						else{
+							ctxB.fillStyle = "#FFFFFF";
+							ctxB.strokeStyle = "#000000";
+						}
+						ctxB.beginPath();
+						ctxB.arc(i*(canvasBrain.width/(net.layers.length-.8)) + 30, j*(canvasBrain.height/(net.layers[i].nodes.length+.5)) + canvasBrain.height/(net.layers[i].nodes.length+.75), 10, 0, 2 * Math.PI, false);
+						ctxB.fill();
+						ctxB.lineWidth = 1;
+						ctxB.stroke();
+					}
+				}
+			}
+		}
+	</script>
+</head>
+<body onload="Main();">
+	<table>
+		<tr>
+		<td>
+			<canvas id="gameCanvas" width="600" height="600" style="border:1px solid black;">
+				Browser does not support canvas.
+			</canvas>
+		</td>
+		<td>
+			<table>
+				<tr>
+					<td colspan=3 style="text-align:center">
+						Nick's View
+						<br />
+						<canvas id="viewCanvas" width="60" height="60" style="border:1px solid black;">
+						</canvas>
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<button>&lt;</button>
+					</td>
+					<td>
+						<button>^</button>
+					</td>
+					<td>
+						<button>&gt;</button>
+					</td>
+				</tr>
+				<tr>
+					<td colspan=3>
+						<input type="radio" name="train" style="white-space: nowrap">Do Not Train</input>
+						<input type="radio" name="train" style="white-space: nowrap">Train on Object</input>
+						<input type="radio" name="train" style="white-space: nowrap">Train when Stuck</input>
+						<input type="radio" name="train" style="white-space: nowrap">Train Always</input>
+					</td>
+				</tr>
+			</table>
+		</td>
+		<td>
+			Nick's Brain
+			<br />
+			<canvas id="brainCanvas" width="800" height="700" style="border:1px solid black;">
+			</canvas>
+		</td>
+		</tr>
+	</table>
+</body>
+</html>

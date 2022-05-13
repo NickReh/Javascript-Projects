@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Splines</title>
+<!-- <script src="./jquery-1.9.1.min.js"></script> -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script type="text/javascript">
+	var canvas;
+	var ctx;
+	var Loops = [];
+	var Points = [];
+	var TangentPoints = [];
+	var numCurvePoints = 4;
+	var dragEl, dragTan;
+	var cardinal = .5;
+	var pointsHidden = false;
+	var calcedTan = true;
+	var tangentsHidden = false;
+	var newPointPos = null;
+	var removePoint = null;
+	
+	function curvePoint (xPos, yPos){
+		this.x = xPos;
+		this.y = yPos;
+		this.width = 12;
+		this.height = 12;
+		this.color = "#0000FF";
+		this.tangentPoint;
+		this.tension = .5;
+	}
+	function tangentPoint (xPos, yPos, parentPnt){
+		this.x = xPos; //offest of parent x
+		this.y = yPos; //offset of parent y
+		this.width = 8;
+		this.height = 8;
+		this.parentPoint = parentPnt;
+		this.color = "#00FF00";
+	}
+	
+	function Start (){
+		canvas = document.getElementById("canvas");
+		ctx = canvas.getContext("2d");
+		
+		//Events
+		canvas.addEventListener("contextmenu", function (event){
+			event.preventDefault();
+			var x = event.pageX - $(canvas).offset().left;
+			var y = event.pageY - $(canvas).offset().top;
+			$("#removepoint").remove();
+			
+			//check to add remove point option
+			if(!tangentsHidden){
+				$.each(Points, function (i, p){
+					if(y >= p.y - p.height/2 && y <= p.y + p.height/2 &&
+						x >= p.x - p.width/2 && x <= p.x + p.width/2){
+						removePoint = p;
+						var removePointDiv = $("<div id='removepoint'>Remove Point</div>");
+						removePointDiv.click(function (){
+							Points.splice(Points.indexOf(removePoint), 1);
+							TangentPoints.splice(TangentPoints.indexOf(TangentPoints), 1);
+							
+							Refresh();
+						});
+						$("#contextmenu").append(removePointDiv);
+					}
+				});
+			}
+			
+			$("#contextmenu").css("left", x - $(canvas).offset().left).css("top", y - $(canvas).offset().top);
+			$("#contextmenu").css("display", "block");
+			newPointPos = {x: x - $(canvas).offset().left, y: y - $(canvas).offset().top};
+		});
+		canvas.addEventListener("mousedown", function (event){		
+			var x = event.pageX - $(canvas).offset().left;
+			var y = event.pageY - $(canvas).offset().top;
+			
+			if(!pointsHidden || !tangentsHidden){
+				for(var i = 0; i < Points.length; i++){
+					var el = Points[i];
+					var tangent = Points[i].tangentPoint;
+					//actual point
+					if(!pointsHidden &&
+						y >= el.y - el.height/2 && y <= el.y + el.height/2 &&
+						x >= el.x - el.width/2 && x <= el.x + el.width/2){
+						dragEl = el;
+						el.color = "#FF0000";
+						Refresh();
+						break;
+					}
+					//tangent point
+					if(!calcedTan && !tangentsHidden &&
+						y >= el.y + el.tangentPoint.y - el.tangentPoint.height/2 && y <= el.y + el.tangentPoint.y + el.tangentPoint.height/2 &&
+						x >= el.x + el.tangentPoint.x - el.tangentPoint.width/2 && x <= el.x + el.tangentPoint.x + el.tangentPoint.width/2){
+						dragTan = el.tangentPoint;
+						dragTan.color = "#FF0000";
+						Refresh();
+						break;
+					}
+				}
+			}
+		});
+		document.addEventListener("mousemove", function (event){
+			if(dragEl){
+				dragEl.x = event.pageX - canvas.offsetLeft - dragEl.width/2;
+				dragEl.y = event.pageY - canvas.offsetTop - dragEl.height/2;
+				Refresh();
+			}else if (dragTan){
+				dragTan.x = event.pageX - canvas.offsetLeft - dragTan.parentPoint.x - dragTan.width/2;
+				dragTan.y = event.pageY - canvas.offsetTop - dragTan.parentPoint.y - dragTan.height/2;
+				Refresh();
+			}
+		});
+		document.addEventListener("mouseup", function (event){
+			$("#contextmenu").css("display", "none");
+			
+			if(dragEl){
+				dragEl.color = "#0000FF";
+				dragEl = null;
+				Refresh();
+			}else if (dragTan){
+				dragTan.color = "#00FF00";
+				dragTan = null;
+				Refresh();
+			}
+		});
+		
+		CreatePoints();
+		Refresh();
+	}
+	
+	function Refresh(){
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		ctx.strokeStyle = "#000000";
+		ctx.beginPath();
+		ctx.rect(100, 100, canvas.width - 200, canvas.height - 200);
+		ctx.stroke();
+		Draw();
+	}
+	
+	function RecalcTangents(){
+		for(i = 0; i < Points.length; i++){
+			var el = Points[i];
+			var prevEl = Points[i - 1] ? Points[i - 1] : Points[Points.length - 1];
+			var nextEl = Points[i + 1] ? Points[i + 1] : Points[0];
+			
+			el.tangentPoint.x = (1 - el.tension)*(nextEl.x - prevEl.x);
+			el.tangentPoint.y = (1 - el.tension)*(nextEl.y - prevEl.y);
+		}
+	}
+	
+	function CreatePoints (){
+		for(var i = 0; i < numCurvePoints; i++){
+			Points.push(new curvePoint(Math.random() * (canvas.width - 200) + 100, Math.random() * (canvas.height - 200) + 100));
+		}
+		//set all point tangents
+		for(i = 0; i < numCurvePoints; i++){
+			var el = Points[i];
+			var prevEl = Points[i - 1] ? Points[i - 1] : Points[numCurvePoints - 1];
+			var nextEl = Points[i + 1] ? Points[i + 1] : Points[0];
+			
+			var tangentX = (1 - el.tension)*(nextEl.x - prevEl.x);
+			var tangentY = (1 - el.tension)*(nextEl.y - prevEl.y);
+			var tanPoint = new tangentPoint(tangentX/2, tangentY/2, el);
+			el.tangentPoint = tanPoint;
+			TangentPoints.push(tanPoint);
+		}
+	}
+	
+	function Draw(){
+		for(var i = 0; i < Points.length; i++){
+			var el = Points[i];
+			var prevEl = Points[i - 1] ? Points[i - 1] : Points[Points.length - 1];
+			var nextEl = Points[(i+1)%Points.length];
+			var nextnextEl = Points[(i+2)%Points.length];
+			if(!pointsHidden){
+				ctx.fillStyle = el.color;
+				ctx.fillRect(el.x - el.width/2, el.y - el.height/2, el.width, el.height);
+			}
+			
+			//draw spline
+			if(nextEl /*&& i > 0 && i < Points.length - 2*/){
+				ctx.strokeStyle  = "#000000";
+				var prevPoint = {x: el.x, y: el.y};
+				var steps = Math.round(Math.abs(nextEl.x - el.x) + Math.abs(nextEl.y - el.y));
+				for(j = 0; j < steps; j++){
+					var s = j / steps;
+					var h1 = 2 * Math.pow(s, 3) - 3 * Math.pow(s, 2) + 1;
+					var h2 = -2 * Math.pow(s, 3) + 3 * Math.pow(s, 2);
+					var h3 = Math.pow(s, 3) - 2 * Math.pow(s, 2) + s;
+					var h4 = Math.pow(s, 3) - Math.pow(s, 2);
+					
+					var splineX, splineY;
+					if(calcedTan){
+						el.tangentPoint.x = (1 - el.tension)*(nextEl.x - prevEl.x);
+						el.tangentPoint.y = (1 - el.tension)*(nextEl.y - prevEl.y);
+						nextEl.tangentPoint.x = (1 - nextEl.tension)*(nextnextEl.x - el.x);
+						nextEl.tangentPoint.y = (1 - nextEl.tension)*(nextnextEl.y - el.y);
+						splineX = h1 * el.x + h2 * nextEl.x + h3 * el.tangentPoint.x + h4 * nextEl.tangentPoint.x;
+						splineY = h1 * el.y + h2 * nextEl.y + h3 * el.tangentPoint.y + h4 * nextEl.tangentPoint.y;
+					}else{
+						splineX = h1 * el.x + h2 * nextEl.x + h3 * el.tangentPoint.x + h4 * nextEl.tangentPoint.x;
+						splineY = h1 * el.y + h2 * nextEl.y + h3 * el.tangentPoint.y + h4 * nextEl.tangentPoint.y;
+					}
+					
+					ctx.beginPath();
+					ctx.moveTo(prevPoint.x, prevPoint.y);
+					ctx.lineTo(splineX, splineY);
+					ctx.stroke();
+					
+					prevPoint = {x: splineX, y: splineY};
+				}
+			}
+			
+			//draw tangent
+			if(!tangentsHidden){
+				ctx.save();
+				ctx.strokeStyle = el.tangentPoint.color;
+				ctx.translate(el.x, el.y);
+				ctx.beginPath();
+				ctx.moveTo(0,0);
+				ctx.lineTo(el.tangentPoint.x, el.tangentPoint.y);
+				ctx.stroke();
+				//draw tangent point
+				ctx.fillStyle = el.tangentPoint.color;
+				ctx.fillRect(el.tangentPoint.x - el.tangentPoint.width/2, el.tangentPoint.y - el.tangentPoint.height/2, el.tangentPoint.width, el.tangentPoint.height);
+				ctx.restore();
+				
+				/*ctx.strokeStyle = el.tangentPoint.color;
+				ctx.beginPath();
+				ctx.moveTo(el.x,el.y);
+				ctx.lineTo(el.x + el.tangentPoint.x, el.y + el.tangentPoint.y);
+				ctx.stroke();
+				//draw tangent point
+				ctx.fillStyle = el.tangentPoint.color;
+				ctx.fillRect(el.x + el.tangentPoint.x - el.tangentPoint.width/2, el.y + el.tangentPoint.y - el.tangentPoint.height/2, el.tangentPoint.width, el.tangentPoint.height);*/
+				
+				//draw tangent arrow
+				/*ctx.save();
+				ctx.strokeStyle = el.tangentPoint.color;
+				ctx.fillStyle = el.tangentPoint.color;
+				ctx.translate(el.x + el.tangentPoint.x, el.y + el.tangentPoint.y);
+				var rot = el.tangentPoint.x/el.tangentPoint.y < 0 ? -el.tangentPoint.x/el.tangentPoint.y : 2*3.1415926 - el.tangentPoint.x/el.tangentPoint.y;
+				ctx.rotate(Math.atan(rot));
+				ctx.beginPath();
+				ctx.moveTo(-4, 0);
+				ctx.lineTo(4, 0);
+				ctx.lineTo(0, 10);
+				ctx.lineTo(-4, 0);
+				ctx.stroke();
+				ctx.fill();
+				ctx.restore();*/
+			}
+		}
+	}
+	
+	$(document).ready(function (){
+		//toggle hiding points
+		$("#hidepoints").click(function (){
+			pointsHidden = !pointsHidden;
+			if(pointsHidden){
+				$(this).html("Show Points");
+				$(this).css("background-color", "red");
+			}else{
+				$(this).html("Hide Points");
+				$(this).css("background-color", "green");
+			}
+			Refresh();
+		});
+		
+		//toggle calced tangents
+		$("#tanCalced").click(function (){
+			calcedTan = !calcedTan;
+			if(calcedTan){
+				$(this).html("Turn Off Calced Tangents");
+				$(this).css("background-color", "green");
+				Refresh();
+			}else{
+				$(this).html("Turn On Calced Tangents");
+				$(this).css("background-color", "red");
+			}
+		});
+		
+		//toggle hiding tangents
+		$("#hidetangents").click(function (){
+			tangentsHidden = !tangentsHidden;
+			if(tangentsHidden){
+				$(this).html("Show Tangents");
+				$(this).css("background-color", "red");
+			}else{
+				$(this).html("Hide Tangents");
+				$(this).css("background-color", "green");
+			}
+			Refresh()
+		});
+		
+		//move points back to canvas
+		$("#pointMoveBtn").click(function (){
+			var selectedRB = $("input:radio[name=pointmove]:checked");
+			var movedPoint = false;
+			var moveRight = function (){
+				$.each(Points, function (i, p){
+					if(p.x + p.width/2 > canvas.width){
+						p.x = canvas.width - p.width/2;
+						movedPoint = true;
+					}
+				});
+			};
+			var moveLeft = function (){
+				$.each(Points, function (i, p){
+					if(p.x - p.width/2 < 0){
+						p.x = p.width;
+						movedPoint = true;
+					}
+				});
+			};
+			var moveTop = function (){
+				$.each(Points, function (i, p){
+					if(p.y - p.height/2 < 0){
+						p.y = p.height/2;
+						movedPoint = true;
+					}
+				});
+			};
+			var moveBottom = function (){
+				$.each(Points, function (i, p){
+					if(p.y + p.height/2 > canvas.height){
+						p.y = canvas.height - p.height/2;
+						movedPoint = true;
+					}
+				});
+			};
+			
+			switch(selectedRB.val()){
+				case "All":
+					moveRight();
+					moveLeft();
+					moveTop();
+					moveBottom();
+					break;
+				case "Right":
+					moveRight();
+					break;
+				case "Left":
+					moveLeft();
+					break;
+				case "Top":
+					moveTop();
+					break;
+				case "Bottom":
+					moveBottom();
+					break;
+			}
+			
+			if(movedPoint){
+				Refresh();
+			}
+		});
+		
+		$("#addpoint").click(function (e){
+			e.preventDefault();
+			$("#contextmenu").css("display", "none");
+			
+			var pointDists = [];
+			$.each(Points, function (i, p){
+				var dist = Math.sqrt(Math.pow(newPointPos.x - p.x, 2) + Math.pow(newPointPos.y - p.y, 2));
+				pointDists.push({point:p, dist: dist});
+			});
+			pointDists.sort(function(a, b){
+				return a.dist - b.dist;
+			});
+			var closestPoint = pointDists[0].point;
+			var indexOfPointAfterClosest = (Points.indexOf(closestPoint) + 1)%Points.length;
+			var indexOfPointBeforeClosest = Points.indexOf(closestPoint) === 0 ? Points.length - 1 : Points.indexOf(closestPoint) - 1;
+			var pointAfterClosest = $.grep(pointDists, function(p){ return p.point == Points[indexOfPointAfterClosest]; });
+			var pointBeforeClosest = $.grep(pointDists, function(p){ return p.point == Points[indexOfPointBeforeClosest]; });
+			var nextClosestPoint = $.grep(pointDists, function (p) {return p.dist === Math.min(pointAfterClosest[0].dist, pointBeforeClosest[0].dist);})[0].point;
+			var indexToAddNewPoint = Math.max(Points.indexOf(closestPoint), Points.indexOf(nextClosestPoint));
+			
+			var addPoint = new curvePoint(newPointPos.x, newPointPos.y);
+			Points.splice(indexToAddNewPoint, 0, addPoint);
+			
+			var prevPoint = indexToAddNewPoint === 0 ? Points[Points.length - 1] : Points[indexToAddNewPoint - 1];
+			var nextPoint = Points[(indexToAddNewPoint + 1)%Points.length];
+			var tangentX = (1 - addPoint.tension)*(nextPoint.x - prevPoint.x);
+			var tangentY = (1 - addPoint.tension)*(nextPoint.y - prevPoint.y);
+			var tanPoint = new tangentPoint(tangentX/2, tangentY/2, addPoint);
+			addPoint.tangentPoint = tanPoint;
+			TangentPoints.push(tanPoint);
+			
+			Refresh();
+		});
+	});
+</script>
+<style>
+	#contextmenu>div{
+		padding: 4px;
+	}
+	#contextmenu>div:hover{		
+		background-color: #22BBFF;
+	}
+</style>
+</head>
+<body onload="Start();">
+	<div id="contextmenu" style="display:none;position:absolute;background-color:white;border:1px solid black;">
+		<div id="addpoint">Add Point</div>
+	</div>
+	<table>
+		<tr>
+			<td>
+				<canvas id="canvas" width="1400" height="900" style="border:1px solid black;"></canvas>
+			</td>
+			<td>
+				<table>
+					<tr>
+						<td>
+							<button id="hidepoints" style="background-color:green;color:white;font-size:larger;">Hide Points</button>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<button id="hidetangents" style="background-color:green;color:white;font-size:larger;">Hide Tangents</button>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<button id="tanCalced" style="background-color:green;color:white;font-size:larger;">Turn Off Calced Tangents</button>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<button id="pointMoveBtn">Move points back onto canvas</button>
+							All<input type="radio" name="pointmove" value="All" checked>
+							Right<input type="radio" name="pointmove" value="Right">
+							Left <input type="radio" name="pointmove" value="Left">
+							Top<input type="radio" name="pointmove" value="Top">
+							Bottom<input type="radio" name="pointmove" value="Bottom">
+						</td>
+					</tr>
+				</table>
+			</td>
+		<tr>
+	</table>
+</body>
+</html>

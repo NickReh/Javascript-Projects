@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PG Tests</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.js"></script>
+</head>
+<body>
+    <canvas id="canvas" width="1000" height="600" style="border:1px solid black;"></canvas>
+
+    <script src="../Rnd.js"></script>
+
+    <script>
+        let ctx = document.getElementById("canvas").getContext("2d");
+        let rng = new Rnd(01012021 * 17);
+
+        this.buildings = [];
+        this.buildings.push(new church(500, 300));
+        for (let building of this.buildings) {
+            building.draw();
+        }
+
+        function church (x, y) {
+            this.x = x;
+            this.y = y;
+
+            this.draw = function () {
+                ctx.beginPath();
+                ctx.moveTo(this.x  - 20, this.y - 10);
+                ctx.lineTo(this.x + 5, this.y - 10);
+                ctx.lineTo(this.x + 5, this.y - 20);
+                ctx.lineTo(this.x + 15, this.y - 20);
+                ctx.lineTo(this.x + 15, this.y - 10);
+                ctx.lineTo(this.x + 25, this.y - 10);
+                ctx.lineTo(this.x + 25, this.y + 10);
+                ctx.lineTo(this.x + 15, this.y + 10);
+                ctx.lineTo(this.x + 15, this.y + 20);
+                ctx.lineTo(this.x + 5, this.y + 20);
+                ctx.lineTo(this.x + 5, this.y + 10);
+                ctx.lineTo(this.x - 20, this.y + 10);
+                ctx.lineTo(this.x - 20, this.y -10);
+                ctx.stroke();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8'>
+<title>Life</title>
+
+<script type="text/javascript">
+	let canvas;
+	let ctx;
+	let paused = true;
+	let squareSize = 14;
+	let life = [];
+
+	function Main (){
+		canvas = document.getElementById("canvas");
+		ctx = canvas.getContext("2d");
+
+		setupBindings();
+
+		for(let i = 0; i < Math.floor(canvas.height/squareSize); i++){
+			let row = [];
+			for(let j = 0; j < Math.floor(canvas.width/squareSize); j++){
+				row.push(0);
+			}
+			life.push(row);
+		}
+
+		let gameLoop = setInterval(Loop, 100);
+	}
+
+	function Loop (){
+		Draw();
+		if(!paused){
+			Step();
+		}
+	}
+
+	function Draw () {
+		ctx.clearRect(0 ,0, canvas.width, canvas.height);
+
+		//draw grid
+		ctx.stokeSytle = "#000000";
+		for(let i = 1; i < canvas.height/squareSize; i++){
+			ctx.beginPath();
+			ctx.moveTo(0, i*squareSize);
+			ctx.lineTo(canvas.width, i*squareSize);
+			ctx.stroke();
+		}
+
+		for(let j = 1; j < canvas.width/squareSize; j++){
+			ctx.beginPath();
+			ctx.moveTo(j*squareSize, 0);
+			ctx.lineTo(j*squareSize, canvas.height);
+			ctx.stroke();
+		}
+
+		//draw squares
+		ctx.fillStyle = "#00AA44";
+		for(let i = 0; i < Math.floor(canvas.height/squareSize); i++){
+			for(let j = 0; j < Math.floor(canvas.width/squareSize); j++){
+				if(life[j][i] === 1){
+					let sum = getMarchingCubesValue(j, i);
+					switch(sum){
+						case 0:
+						break;
+						case 1:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize + squareSize);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 2:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize + squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize / 2);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 3:
+						ctx.fillRect(j * squareSize, i * squareSize + squareSize / 2, squareSize, squareSize / 2);
+						break;
+						case 4:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize + squareSize / 2, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize / 2);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 5:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 6:
+						ctx.fillRect(j * squareSize + squareSize / 2, i * squareSize, squareSize / 2, squareSize);
+						break;
+						case 7:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 8:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize / 2);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 9:
+						ctx.fillRect(j * squareSize, i * squareSize, squareSize / 2, squareSize);
+						break;
+						case 10:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize / 2);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 11:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 12:
+						ctx.fillRect(j * squareSize, i * squareSize, squareSize, squareSize / 2);
+						break;
+						case 13:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize / 2);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						case 14:
+						ctx.beginPath();
+						ctx.moveTo(j * squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize);
+						ctx.lineTo(j * squareSize + squareSize, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize + squareSize / 2, i * squareSize + squareSize);
+						ctx.lineTo(j * squareSize, i * squareSize + squareSize / 2);
+						ctx.closePath();
+						ctx.fill();
+						break;
+						default:
+						ctx.fillRect(j * squareSize, i * squareSize, squareSize, squareSize);
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	function Step() {
+		let lifeChanges = [];
+		for(let i = 0; i < Math.floor(canvas.height/squareSize); i++){
+			for(let j = 0; j < Math.floor(canvas.width/squareSize); j++){
+				let tl = !!life[j-1] && life[j-1][i-1] ? life[j-1][i-1] : 0; 
+				let ml = !!life[j-1] && life[j-1][i] ? life[j-1][i] : 0;
+				let bl = !!life[j-1] && life[j-1][i+1] ? life[j-1][i+1] : 0; 
+				let tm = !!life[j] && life[j][i-1] ? life[j][i-1] : 0;
+				let bm = !!life[j] && life[j][i+1] ? life[j][i+1] : 0;
+				let tr = !!life[j+1] && life[j+1][i-1] ? life[j+1][i-1] : 0; 
+				let mr = !!life[j+1] && life[j+1][i] ? life[j+1][i] : 0;
+				let br = !!life[j+1] && life[j+1][i+1] ? life[j+1][i+1] : 0;
+
+				let sum = tl + ml + bl + tm + bm + tr + mr + br;
+
+				if(sum < 2){
+					lifeChanges.push({x: j, y: i, val: 0});
+				}else if (sum > 3){
+					lifeChanges.push({x: j, y: i, val: 0});
+				}else if(sum === 3){
+					lifeChanges.push({x: j, y: i, val: 1});
+				}
+			}
+		}
+
+		for(let i = 0; i < lifeChanges.length; i++){
+			life[lifeChanges[i].x][lifeChanges[i].y] = lifeChanges[i].val;
+		}
+	}
+
+	function getMarchingCubesValue(x, y){
+		let sum = 0;
+		//bottom left
+		if(x - 1 < 0 || y + 1 > Math.floor(canvas.height/squareSize) - 1 || life[x - 1][y] === 1 || life[x - 1][y + 1] === 1 || life[x][y + 1] === 1){
+			sum |= 1;
+		}
+
+		//bottom right
+		if(x + 1 > Math.floor(canvas.width/squareSize) - 1 || y + 1 > Math.floor(canvas.height/squareSize) - 1 || life[x+1][y] === 1 || life[x+1][y+1] === 1 || life[x][y+1] === 1){
+			sum |= 2;
+		}
+
+		//top right
+		if(x + 1 > Math.floor(canvas.width/squareSize) - 1 || y - 1 < 0 || life[x+1][y] === 1 || life[x+1][y-1] === 1 || life[x][y-1] === 1){
+			sum |= 4;
+		}
+
+		//top left
+		if(x - 1 < 0 || y - 1 < 0 || life[x - 1][y] === 1 || life[x - 1][y - 1] === 1 || life[x][y - 1] === 1){
+			sum |= 8;
+		}
+
+		return sum;
+	}
+	
+	function setupBindings(){
+		let playBtn = document.getElementById("playBtn");
+		playBtn.addEventListener("click", function (e){
+			paused = !paused;
+			if(paused){
+				playBtn.innerHTML = "Play";
+			}else{
+				playBtn.innerHTML = "Pause";
+			}
+		});
+
+		canvas.addEventListener("click", function (e){
+			let clickedX = Math.floor((e.clientX - canvas.offsetLeft) / squareSize);
+			let clickedY = Math.floor((e.clientY - canvas.offsetTop) / squareSize);
+			
+			if(life[clickedX][clickedY] === 0){
+				life[clickedX][clickedY] = 1;
+			}else{
+				life[clickedX][clickedY] = 0;
+			}
+		});
+	}
+
+</script>
+
+</head>
+<body onload="Main()">
+	<canvas id="canvas" width="700" height="700" style="width:700px;height:700px;border:solid 1px black;"></canvas>
+	<button id="playBtn">Play</button>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8'>
+<title>Life</title>
+
+<script type="text/javascript">
+	let canvas;
+	let ctx;
+	let paused = true;
+	const hexSize = 8;
+	const hexWidth = Math.sqrt(3) * hexSize;
+	let numInRow = 0;
+	let numInCol = 0;
+	let life = [];
+
+	function getHexByQR (q, r){
+		if(q < 0 || q > numInRow - 1 || r < 0 || r > numInCol - 1){
+			return null;
+		}
+		return life[r * numInRow + q];
+	}
+
+	function Hex (q, r){
+		this.value = Math.random() > .7 ? 1 : 0;
+		this.q = q;
+		this.r = r;
+		this.index = r * numInRow + q;
+		this.centerX = function (){
+			let x = this.q * hexWidth + hexWidth / 2;
+			if(this.r % 2 === 1){
+				x += hexWidth / 2;
+			}
+			return x;
+		};
+		this.centerY = function (){
+			return this.r * 3 * hexSize / 2 + hexSize;
+		};
+		this.getPoint = function(num){
+			let angle_deg = 60 * num - 30;
+			let angle_rad = Math.PI / 180 * angle_deg;
+			let x = this.centerX();
+			let y = this.centerY();
+			return {x: x + hexSize * Math.cos(angle_rad), y: y + hexSize * Math.sin(angle_rad)};
+		};
+		this.getNeighbors = function (){
+			let offset = (this.r + 1) % 2;
+
+			/*let tl = this.r - 1 - offset < 0 ? null : life[this.index - numInRow - offset];
+			let tr = this.index - numInRow + 1 - offset < 0 ? null : life[this.index - numInRow + 1 - offset];
+			let l = this.index - 1 < 0 ? null : life[this.index - 1];
+			let r = this.index + 1 > life.length - 1 ? null : life[this.index + 1];
+			let bl = this.index + numInRow - offset ? null : life[this.index + numInRow - offset];
+			let br = this.index + numInRow + 1 - offset ? null : life[this.index + numInRow + 1 - offset];*/
+
+			let tl = getHexByQR(this.q - 1 - offset, this.r - 1);
+			let tr = getHexByQR(this.q - offset, this.r - 1);
+			let l = getHexByQR(this.q - 1, this.r);
+			let r = getHexByQR(this.q + 1, this.r);
+			let bl = getHexByQR(this.q - offset, this.r + 1);
+			let br = getHexByQR(this.q + 1 - offset, this.r + 1);
+
+			return {
+				"topLeft": tl,
+				"topRight": tr,
+				"left": l,
+				"right": r,
+				"bottomLeft": bl,
+				"bottomRight": br
+			};
+		}
+
+		this.draw = function (){
+			//draw outline
+			ctx.strokeStyle = "#000";
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			let point = this.getPoint(0);
+			ctx.moveTo(point.x, point.y);
+			for(let i = 1; i < 6; i++){
+				let point = this.getPoint(i);
+				ctx.lineTo(point.x, point.y);
+			}
+			ctx.closePath();
+			ctx.stroke();
+
+			//fill in
+			if(this.value === 1){
+				ctx.fillStyle = "#00dd55";
+				ctx.fill();
+			}			
+		}
+	}
+
+	function Main (){
+		canvas = document.getElementById("canvas");
+		ctx = canvas.getContext("2d");
+
+		numInRow = Math.floor((canvas.width/hexWidth) - .5);
+		numInCol = Math.floor((canvas.height/(3 * hexSize / 2)) + hexSize);
+
+		setupBindings();
+
+		for(let i = 0; i < numInCol; i++){
+			for(let j = 0; j < numInRow; j++){
+				life.push(new Hex(j, i));
+			}
+		}
+
+		let gameLoop = setInterval(Loop, 100);
+	}
+
+	function Loop (){
+		Draw();
+		if(!paused){
+			Step();
+		}
+	}
+
+	function Draw () {
+		ctx.clearRect(0 ,0, canvas.width, canvas.height);
+
+		//draw grid
+		/*ctx.stokeSytle = "#000000";
+		for(let i = 1; i < canvas.height/squareSize; i++){
+			ctx.beginPath();
+			ctx.moveTo(0, i*squareSize);
+			ctx.lineTo(canvas.width, i*squareSize);
+			ctx.stroke();
+		}
+
+		for(let j = 1; j < canvas.width/squareSize; j++){
+			ctx.beginPath();
+			ctx.moveTo(j*squareSize, 0);
+			ctx.lineTo(j*squareSize, canvas.height);
+			ctx.stroke();
+		}*/
+
+		//draw squares
+		ctx.fillStyle = "#00AA44";
+		for(let i = 0; i < life.length; i++){
+				life[i].draw();
+		}
+	}
+
+	function Step() {
+		let lifeChanges = [];
+		for(let i = 0; i < life.length; i++){
+			let neighbors = life[i].getNeighbors();
+			let tl = neighbors["topLeft"] === null ? 0 : neighbors["topLeft"].value;
+			let tr = neighbors["topRight"] === null ? 0 : neighbors["topRight"].value;
+			let l = neighbors["left"] === null ? 0 : neighbors["left"].value;
+			let r = neighbors["right"] === null ? 0 : neighbors["right"].value;
+			let bl = neighbors["bottomLeft"] === null ? 0 : neighbors["bottomLeft"].value;
+			let br = neighbors["bottomRight"] === null ? 0 : neighbors["bottomRight"].value;
+
+			let sum = tl + tr + l + r + bl + br;
+
+			if(sum < 2){
+				lifeChanges.push({index: i, val: 0});
+			}else if (sum > 3){
+				lifeChanges.push({index: i, val: 0});
+			}else if(sum === 3){
+				lifeChanges.push({index: i, val: 1});
+			}
+		}
+
+		for(let i = 0; i < lifeChanges.length; i++){
+			life[lifeChanges[i].index].value = lifeChanges[i].val;
+		}
+	}
+	
+	function setupBindings(){
+		let playBtn = document.getElementById("playBtn");
+		playBtn.addEventListener("click", function (e){
+			paused = !paused;
+			if(paused){
+				playBtn.innerHTML = "Play";
+			}else{
+				playBtn.innerHTML = "Pause";
+			}
+		});
+
+		canvas.addEventListener("click", function (e){
+			let canvasX = e.clientX - canvas.offsetLeft;
+			let canvasY = e.clientY - canvas.offsetTop;
+			let clickedR = Math.floor((canvasY + hexSize) / (3 * hexSize / 2));
+			let clickedQ = Math.floor(canvasX / (Math.sqrt(3) * hexSize) - .5);
+			let clickedLife = getHexByQR(clickedQ, clickedR);
+			
+			if(clickedLife.value === 0){
+				clickedLife.value = 1;
+			}else{
+				clickedLife.value = 0;
+			}
+		});
+	}
+
+</script>
+
+</head>
+<body onload="Main()">
+	<canvas id="canvas" width="700" height="700" style="width:700px;height:700px;border:solid 1px black;"></canvas>
+	<button id="playBtn">Play</button>
+</body>
+</html>

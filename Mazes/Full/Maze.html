@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Maze</title>
+    <script src="./Maze.js"></script>
+    <script src="./Cell.js"></script>
+    <script type="text/javascript">
+        function Main(){
+            let canvas = document.getElementById('gameCanvas');
+            if(canvas.getContext){
+                //init canvas
+                ctx = canvas.getContext('2d');
+                
+                maze = new Maze(55, 55, 5, 5, "kruskals", undefined, undefined, 10);
+                maze.createMaze();
+                maze.draw(ctx);
+            }
+        }
+    </script>
+</head>
+<body onload="Main();">
+	<table>
+		<td>
+			<canvas id="gameCanvas" width="600" height="600" style="border:1px solid black;">
+				Browser does not support canvas.
+			</canvas>
+		</td>
+	</table>
+</body>
+</html>
