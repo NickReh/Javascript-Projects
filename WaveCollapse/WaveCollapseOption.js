@@ -10,6 +10,8 @@ class WaveCollapseOption {
 		
 		this.id = data.id;
 		this.neighborOps = data.neighborOps || [];
-		this.minAlone = this.minAlone || 1;
+		this.minGrouped = data.minGrouped || 1;
+		this.maxGrouped = data.maxGrouped || Infinity;
+		
 	}
 }

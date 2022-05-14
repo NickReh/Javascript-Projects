@@ -2,8 +2,8 @@
 var cellOptions = [];
 
 //global variables
-var rows = 6;
-var cols = 6;
+var rows = 22;
+var cols = 22;
 var spritePixelSize = 32;
 var world = [];
 var collapsedCells = [];
